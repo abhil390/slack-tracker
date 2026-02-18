@@ -188,7 +188,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.4</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -532,36 +532,50 @@ async function saveViolationsForDate(dateStr, report){
 // ══════════════════════════════════════════════════════════════
 async function saveResolutionToCloud(date, name, resolution, reason){
     setSyncStatus('loading','Saving resolution to cloud…');
-    console.log('[saveResolution] date='+date+' name='+name+' resolution='+resolution);
     try{
-        const existing = dbRows.find(d=>d.date===date && d.name===name);
-        console.log('[saveResolution] existing row=', existing);
-        if(!existing || !existing.id){
-            setSyncStatus('error','❌ Record not found. Please click 🔄 Refresh and try again.');
+        // Find the row in our local cache
+        const idx = dbRows.findIndex(d => d.date === date && d.name === name);
+        if(idx === -1 || !dbRows[idx].id){
+            setSyncStatus('error','❌ Record not found. Click 🔄 Refresh and try again.');
             return;
         }
-        const payload = {
-            resolution: resolution,
-            reason: reason,
-            resolved_at: resolution!=='violation' ? new Date().toLocaleString() : '',
-            updated_at: new Date().toISOString()
-        };
-        console.log('[saveResolution] PATCH payload=', payload, 'id='+existing.id);
-        await dbPatch(existing.id, payload);
-        console.log('[saveResolution] PATCH done — reloading from cloud');
-        await loadFromCloud();
-        // Switch filter to "Active Violations Only" so resolved records disappear from view
+        const rowId = dbRows[idx].id;
+        const resolvedAt = resolution !== 'violation' ? new Date().toLocaleString() : '';
+
+        // STEP 1: Send PATCH to Supabase
+        await dbPatch(rowId, {
+            resolution:  resolution,
+            reason:      reason,
+            resolved_at: resolvedAt,
+            updated_at:  new Date().toISOString()
+        });
+
+        // STEP 2: Update local cache immediately — no waiting for server reload
+        dbRows[idx].resolution  = resolution;
+        dbRows[idx].reason      = reason;
+        dbRows[idx].resolved_at = resolvedAt;
+
+        // STEP 3: Switch filter to Active Violations Only so resolved records hide
         if(resolution !== 'violation'){
             document.getElementById('histTypeFilter').value = 'active';
         }
+
+        // STEP 4: Re-render right away using updated local data
         renderHistory(getHistFilters());
-        setSyncStatus('ok','✅ Resolution saved and synced to both users.');
+        updateHistBadge();
+
+        const label = resolution === 'violation' ? 'Reverted to Violation' :
+                      resolution === 'On Leave'  ? 'Marked as On Leave'    : 'Marked as Ignored';
+        setSyncStatus('ok', '✅ ' + label + ' for ' + name + ' — saved & synced.');
+
+        // STEP 5: Background reload from cloud to confirm (does not block UI)
+        setTimeout(() => loadFromCloud().catch(e => console.warn('BG reload:', e)), 1500);
+
     } catch(e){
-        setSyncStatus('error','❌ Could not save resolution: '+e.message);
+        setSyncStatus('error', '❌ Could not save: ' + e.message);
         console.error('[saveResolution] ERROR:', e);
     }
 }
-
 // ══════════════════════════════════════════════════════════════
 //  ANALYTICS
 // ══════════════════════════════════════════════════════════════
