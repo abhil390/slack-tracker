@@ -188,7 +188,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.2</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.3</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -278,7 +278,7 @@
                 <label>Show:</label>
                 <select id="histTypeFilter">
                     <option value="all">All Records</option>
-                    <option value="active">Active Violations Only</option>
+                    <option value="active" selected>Active Violations Only</option>
                     <option value="resolved">Resolved Only</option>
                     <option value="Missing">Missing</option>
                     <option value="Incomplete">Incomplete</option>
@@ -490,7 +490,8 @@ async function loadFromCloud(){
     setSyncStatus('loading','Loading shared history from cloud…');
     try{
         dbRows = await dbLoad();
-        setSyncStatus('ok', `✅ Connected — ${dbRows.length} records loaded. Both users share this history.`);
+        const active = dbRows.filter(r=>r.resolution==='violation').length;
+        setSyncStatus('ok', '✅ Connected — ' + active + ' active violation' + (active!==1?'s':'') + ' | ' + dbRows.length + ' total records. Shared between both users.');
         renderHistory(getHistFilters());
     } catch(e){
         setSyncStatus('error','❌ Could not connect to database. Check your API key. — '+e.message);
@@ -549,6 +550,11 @@ async function saveResolutionToCloud(date, name, resolution, reason){
         await dbPatch(existing.id, payload);
         console.log('[saveResolution] PATCH done — reloading from cloud');
         await loadFromCloud();
+        // Switch filter to "Active Violations Only" so resolved records disappear from view
+        if(resolution !== 'violation'){
+            document.getElementById('histTypeFilter').value = 'active';
+        }
+        renderHistory(getHistFilters());
         setSyncStatus('ok','✅ Resolution saved and synced to both users.');
     } catch(e){
         setSyncStatus('error','❌ Could not save resolution: '+e.message);
