@@ -179,13 +179,22 @@
         /* date manager */
         .date-manager{background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:16px;margin-bottom:18px;}
         .date-manager h4{font-size:13px;font-weight:700;color:#555;margin-bottom:12px;text-transform:uppercase;letter-spacing:.4px;}
-        .date-list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;}
-        .date-row-item{display:flex;align-items:center;justify-content:space-between;background:white;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;flex-wrap:wrap;gap:8px;}
-        .date-row-item:hover{background:#fafafa;}
-        .date-row-label{font-size:14px;font-weight:700;color:#2c3e50;}
-        .date-row-meta{font-size:12px;color:#888;margin-left:8px;}
-        .date-row-actions{display:flex;gap:6px;align-items:center;}
-        .no-dates{color:#aaa;font-size:13px;padding:10px 0;text-align:center;}
+        .date-manager-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+        .date-manager-row select{flex:1;min-width:200px;padding:9px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;cursor:pointer;}
+        .date-manager-row select:focus{outline:none;border-color:#1a4d8c;}
+        .date-manager-meta{font-size:12px;color:#888;margin-top:8px;}
+        .no-dates{color:#aaa;font-size:13px;padding:4px 0;}
+
+        /* clear-all confirm modal */
+        .modal-clear{background:white;border-radius:14px;width:90%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden;}
+        .modal-clear-header{background:linear-gradient(135deg,#dc3545,#b02a37);color:white;padding:18px 24px;}
+        .modal-clear-header h3{font-size:16px;font-weight:700;}
+        .modal-clear-body{padding:24px;}
+        .modal-clear-body p{font-size:14px;color:#555;margin-bottom:16px;line-height:1.6;}
+        .modal-clear-body input{width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:2px;text-align:center;}
+        .modal-clear-body input:focus{outline:none;border-color:#dc3545;}
+        .modal-clear-body input.match{border-color:#27ae60;background:#f0fff4;}
+        .modal-clear-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
 
         .debug-info{background:#f8f9fa;padding:10px;margin:10px 0;border-radius:5px;font-size:12px;color:#666;max-height:200px;overflow:auto;display:none;border:1px solid #dee2e6;font-family:monospace;}
         .footer{text-align:center;margin-top:20px;color:#666;font-size:13px;}
@@ -199,7 +208,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.5</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.6</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -305,8 +314,15 @@
             </div>
             <!-- Date Manager -->
             <div class="date-manager">
-                <h4>📅 Manage Data by Date — Delete a date and re-enter fresh data</h4>
-                <div class="date-list" id="dateList"></div>
+                <h4>📅 Manage Data by Date — Select a date to delete and re-enter fresh data</h4>
+                <div class="date-manager-row">
+                    <select id="dateSelect" onchange="onDateSelectChange()">
+                        <option value="">— Select a date —</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" id="dateReenterBtn" onclick="preloadSelectedDate()" disabled>✏️ Re-enter Data</button>
+                    <button class="btn btn-danger btn-sm"   id="dateDeleteBtn"  onclick="deleteSelectedDate()"  disabled>🗑️ Delete Date</button>
+                </div>
+                <div class="date-manager-meta" id="dateMeta"></div>
             </div>
 
             <div id="histContent"></div>
@@ -317,6 +333,24 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Clear All Modal (requires typing CLEAR) -->
+<div class="modal-overlay" id="clearOverlay">
+    <div class="modal-clear">
+        <div class="modal-clear-header">
+            <h3>🗑️ Clear All History</h3>
+        </div>
+        <div class="modal-clear-body">
+            <p>This will <strong>permanently delete ALL violation history</strong> for both users and cannot be undone.<br><br>
+            To confirm, type <strong>CLEAR</strong> in the box below:</p>
+            <input type="text" id="clearConfirmInput" placeholder="Type CLEAR here…" autocomplete="off"/>
+        </div>
+        <div class="modal-clear-footer">
+            <button class="btn btn-secondary" id="clearOverlayCancel">Cancel</button>
+            <button class="btn btn-danger"    id="clearOverlayConfirm" disabled>🗑️ Delete Everything</button>
+        </div>
+    </div>
+</div>
 
 <!-- Confirm Modal -->
 <div class="modal-overlay" id="confirmOverlay">
@@ -374,7 +408,7 @@
 //  ⚙️  SUPABASE CONFIG  — paste your keys here
 // ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://tfapnbvrquswjzogdhbh.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_VcT6pNqY6tO0jwBgBkOqQQ_ie4JPHdD';  // ← replace this with the long eyJ... key
+const SUPABASE_KEY = 'PASTE_YOUR_ANON_KEY_HERE';  // ← replace this with the long eyJ... key
 const TABLE = 'violation_history';
 
 // ══════════════════════════════════════════════════════════════
@@ -646,67 +680,79 @@ function updateHistBadge(){
 //  DATE MANAGER
 // ══════════════════════════════════════════════════════════════
 function renderDateManager(){
-    const list = document.getElementById('dateList');
-    if(!list) return;
+    const sel = document.getElementById('dateSelect');
+    if(!sel) return;
+
+    // Remember current selection
+    const prev = sel.value;
 
     // Get unique dates sorted newest first
     const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
 
-    if(!dates.length){
-        list.innerHTML='<div class="no-dates">No data saved yet.</div>';
+    sel.innerHTML = '<option value="">— Select a date —</option>';
+    dates.forEach(date=>{
+        const rows   = dbRows.filter(r=>r.date===date);
+        const active = rows.filter(isActive).length;
+        const total  = rows.length;
+        const opt    = document.createElement('option');
+        opt.value    = date;
+        opt.textContent = formatDate(date) + '  (' + active + ' active / ' + total + ' total)';
+        sel.appendChild(opt);
+    });
+
+    // Restore previous selection if still valid
+    if(prev && dates.includes(prev)) sel.value = prev;
+    onDateSelectChange();
+}
+
+function onDateSelectChange(){
+    const sel      = document.getElementById('dateSelect');
+    const dateStr  = sel.value;
+    const meta     = document.getElementById('dateMeta');
+    const reBtn    = document.getElementById('dateReenterBtn');
+    const delBtn   = document.getElementById('dateDeleteBtn');
+
+    if(!dateStr){
+        meta.textContent = '';
+        reBtn.disabled = true;
+        delBtn.disabled = true;
         return;
     }
 
-    list.innerHTML = dates.map(date=>{
-        const rows      = dbRows.filter(r=>r.date===date);
-        const total     = rows.length;
-        const active    = rows.filter(isActive).length;
-        const resolved  = total - active;
-        const metaParts = [];
-        if(active)   metaParts.push(active+' active violation'+(active!==1?'s':''));
-        if(resolved) metaParts.push(resolved+' resolved');
-
-        return `<div class="date-row-item">
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
-                <span class="date-row-label">📅 ${formatDate(date)}</span>
-                <span class="date-row-meta">(${metaParts.join(' · ')})</span>
-            </div>
-            <div class="date-row-actions">
-                <button class="btn btn-xs btn-secondary" onclick="preloadDate('${date}')"
-                    title="Set this date in the input field so you can re-enter data for it">
-                    ✏️ Re-enter Data
-                </button>
-                <button class="btn btn-xs btn-danger" onclick="confirmDeleteDate('${date}')"
-                    title="Delete all records for this date">
-                    🗑️ Delete
-                </button>
-            </div>
-        </div>`;
-    }).join('');
+    const rows     = dbRows.filter(r=>r.date===dateStr);
+    const active   = rows.filter(isActive).length;
+    const resolved = rows.length - active;
+    const parts    = [];
+    if(active)   parts.push(active+' active violation'+(active!==1?'s':''));
+    if(resolved) parts.push(resolved+' resolved');
+    meta.textContent = parts.length ? parts.join(' · ') : 'No violations on this date';
+    reBtn.disabled = false;
+    delBtn.disabled = false;
 }
 
-// Set the report date input to the selected date so user can paste fresh data
-function preloadDate(dateStr){
+function preloadSelectedDate(){
+    const dateStr = document.getElementById('dateSelect').value;
+    if(!dateStr) return;
     document.getElementById('reportDate').value = dateStr;
     document.getElementById('slackInput').value = '';
-    // Scroll to top smoothly
     window.scrollTo({top:0, behavior:'smooth'});
     showToast('📅 Date set to '+formatDate(dateStr)+' — paste fresh Slack data and click Process.');
 }
 
-// Confirm then delete all records for a specific date
-function confirmDeleteDate(dateStr){
+function deleteSelectedDate(){
+    const dateStr = document.getElementById('dateSelect').value;
+    if(!dateStr) return;
+    const count = dbRows.filter(r=>r.date===dateStr).length;
     openConfirm(
         'Delete Date',
-        'This will permanently delete <strong>all '+dbRows.filter(r=>r.date===dateStr).length+' records</strong> for <strong>'+formatDate(dateStr)+'</strong>.<br><br>You can then re-enter fresh data for this date.',
+        'This will permanently delete <strong>all '+count+' records</strong> for <strong>'+formatDate(dateStr)+'</strong>.<br><br>You can then paste fresh data for this date.',
         async ()=>{
             setSyncStatus('loading','Deleting records for '+formatDate(dateStr)+'…');
             try{
                 await dbDeleteByDate(dateStr);
                 await loadFromCloud();
-                showToast('🗑️ All records for '+formatDate(dateStr)+' deleted. You can now re-enter fresh data.');
-                // Also set the date input so they can immediately paste fresh data
                 document.getElementById('reportDate').value = dateStr;
+                showToast('🗑️ Deleted all records for '+formatDate(dateStr)+'. Paste fresh data and click Process.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
             }
@@ -1272,11 +1318,33 @@ document.addEventListener('DOMContentLoaded',async function(){
     });
     document.getElementById('histExportBtn').addEventListener('click',()=>exportHistoryCSV(getHistFilters()));
     document.getElementById('histClearBtn').addEventListener('click',()=>{
-        openConfirm('Clear All History','This will permanently delete ALL violation history for both users. Cannot be undone.',async()=>{
-            setSyncStatus('loading','Deleting all records…');
-            try{await dbDeleteAll();await loadFromCloud();showToast('🗑️ History cleared.');}
-            catch(e){setSyncStatus('error','Delete failed: '+e.message);}
-        });
+        document.getElementById('clearConfirmInput').value='';
+        document.getElementById('clearOverlayConfirm').disabled=true;
+        document.getElementById('clearOverlay').classList.add('open');
+        setTimeout(()=>document.getElementById('clearConfirmInput').focus(),100);
+    });
+    document.getElementById('clearConfirmInput').addEventListener('input',function(){
+        const match = this.value.trim().toUpperCase() === 'CLEAR';
+        document.getElementById('clearOverlayConfirm').disabled = !match;
+        this.classList.toggle('match', match);
+    });
+    document.getElementById('clearOverlayCancel').addEventListener('click',()=>{
+        document.getElementById('clearOverlay').classList.remove('open');
+    });
+    document.getElementById('clearOverlayConfirm').addEventListener('click',async()=>{
+        document.getElementById('clearOverlay').classList.remove('open');
+        setSyncStatus('loading','Deleting all records…');
+        try{
+            await dbDeleteAll();
+            await loadFromCloud();
+            showToast('🗑️ All history cleared.');
+        } catch(e){
+            setSyncStatus('error','Delete failed: '+e.message);
+        }
+    });
+    document.getElementById('clearOverlay').addEventListener('click',e=>{
+        if(e.target===document.getElementById('clearOverlay'))
+            document.getElementById('clearOverlay').classList.remove('open');
     });
 
     document.getElementById('confirmOk').addEventListener('click',()=>{if(_ccb)_ccb();closeConfirm();});
