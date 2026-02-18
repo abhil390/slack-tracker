@@ -188,7 +188,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.1</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.2</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -404,11 +404,14 @@ async function dbInsert(row){
 
 // Update an existing row by its uuid — used for resolution changes
 async function dbPatch(id, fields){
-    return sbFetch(TABLE + `?id=eq.${id}`, {
+    console.log('[dbPatch] PATCH to id='+id, fields);
+    const result = await sbFetch(TABLE + '?id=eq.' + id, {
         method: 'PATCH',
         prefer: 'return=representation',
         body: JSON.stringify(fields)
     });
+    console.log('[dbPatch] result=', result);
+    return result;
 }
 
 // Check if row exists for date+name, then insert or patch
@@ -528,23 +531,28 @@ async function saveViolationsForDate(dateStr, report){
 // ══════════════════════════════════════════════════════════════
 async function saveResolutionToCloud(date, name, resolution, reason){
     setSyncStatus('loading','Saving resolution to cloud…');
+    console.log('[saveResolution] date='+date+' name='+name+' resolution='+resolution);
     try{
         const existing = dbRows.find(d=>d.date===date && d.name===name);
+        console.log('[saveResolution] existing row=', existing);
         if(!existing || !existing.id){
-            setSyncStatus('error','❌ Record not found in database. Try refreshing.');
+            setSyncStatus('error','❌ Record not found. Please click 🔄 Refresh and try again.');
             return;
         }
-        // Use PATCH by id — this is the most reliable way to update a specific row
-        await dbPatch(existing.id, {
+        const payload = {
             resolution: resolution,
             reason: reason,
-            resolved_at: resolution!=='violation' ? new Date().toLocaleString() : ''
-        });
+            resolved_at: resolution!=='violation' ? new Date().toLocaleString() : '',
+            updated_at: new Date().toISOString()
+        };
+        console.log('[saveResolution] PATCH payload=', payload, 'id='+existing.id);
+        await dbPatch(existing.id, payload);
+        console.log('[saveResolution] PATCH done — reloading from cloud');
         await loadFromCloud();
         setSyncStatus('ok','✅ Resolution saved and synced to both users.');
     } catch(e){
         setSyncStatus('error','❌ Could not save resolution: '+e.message);
-        console.error('saveResolutionToCloud error:', e);
+        console.error('[saveResolution] ERROR:', e);
     }
 }
 
@@ -611,11 +619,19 @@ async function saveEdit(){
     if(selectedResolution!=='violation' && !reason){
         void ta.offsetWidth; ta.classList.add('required-shake'); ta.focus(); return;
     }
+
+    // ⚠️ Capture BEFORE closing modal — closeEditModal sets editContext to null
+    const savedDate = editContext.date;
+    const savedName = editContext.name;
+    const savedResolution = selectedResolution;
+
     closeEditModal();
-    await saveResolutionToCloud(editContext.date, editContext.name, selectedResolution, reason);
-    const label = selectedResolution==='violation'?'reverted to Violation':
-                  selectedResolution==='On Leave'?'marked as On Leave':'marked as Ignored';
-    showToast(`✅ ${esc(editContext.name)} — ${label} (synced to cloud)`);
+
+    await saveResolutionToCloud(savedDate, savedName, savedResolution, reason);
+
+    const label = savedResolution==='violation' ? 'reverted to Violation' :
+                  savedResolution==='On Leave'  ? 'marked as On Leave'    : 'marked as Ignored';
+    showToast('✅ ' + savedName + ' — ' + label + ' (synced to cloud)');
 }
 
 function closeEditModal(){ document.getElementById('editOverlay').classList.remove('open'); editContext=null; }
