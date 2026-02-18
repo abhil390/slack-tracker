@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slack Login/Logout Tracker</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+        body { background:#f0f2f5; padding:20px; }
+        .container { max-width:1500px; margin:0 auto; }
+
+        /* ── Header ── */
+        .header { background:linear-gradient(135deg,#1a4d8c 0%,#2c3e50 100%); color:white; padding:20px 30px; border-radius:15px 15px 0 0; }
+        .header h1 { font-size:24px; margin-bottom:5px; }
+        .header p  { opacity:.9; font-size:14px; }
+
+        /* ── Employee Panel ── */
+        .emp-panel { background:white; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.1); margin-bottom:20px; overflow:hidden; }
+        .emp-panel-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; background:#f8f9fa; border-bottom:1px solid #e0e0e0; cursor:pointer; user-select:none; }
+        .emp-panel-header h2 { font-size:15px; color:#333; font-weight:600; display:flex; align-items:center; gap:8px; }
+        .emp-count { background:#1a4d8c; color:white; font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px; }
+        .toggle-icon { font-size:14px; color:#888; transition:transform .25s; }
+        .emp-panel-header.open .toggle-icon { transform:rotate(180deg); }
+        .emp-panel-body { display:none; padding:20px; }
+        .emp-panel-body.open { display:block; }
+
+        /* Team tabs inside employee panel */
+        .team-tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+        .team-tab {
+            padding:8px 18px; border-radius:8px; font-size:13px; font-weight:600;
+            cursor:pointer; border:2px solid transparent; transition:all .2s;
+            background:#f0f2f5; color:#555;
+        }
+        .team-tab.active-annotation { background:#e8f0fe; color:#1a4d8c; border-color:#1a4d8c; }
+        .team-tab.active-assessment { background:#fef3e8; color:#c0631a; border-color:#c0631a; }
+
+        .add-emp-row { display:flex; gap:10px; margin-bottom:18px; }
+        .add-emp-row input { flex:1; padding:10px 14px; border:2px solid #e0e0e0; border-radius:8px; font-size:14px; transition:border-color .2s; }
+        .add-emp-row input:focus { outline:none; border-color:#1a4d8c; }
+        .add-emp-row input.shake { animation:shake .3s; border-color:#dc3545; }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+
+        .emp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px; max-height:260px; overflow-y:auto; padding-right:4px; }
+        .emp-chip { display:flex; align-items:center; justify-content:space-between; border-radius:8px; padding:8px 12px; font-size:13px; color:#333; transition:background .15s; }
+        .emp-chip.annotation { background:#e8f0fe; }
+        .emp-chip.annotation:hover { background:#d2e3fc; }
+        .emp-chip.assessment { background:#fef3e8; }
+        .emp-chip.assessment:hover { background:#fde0c0; }
+        .emp-chip .emp-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .emp-chip .remove-btn { background:none; border:none; cursor:pointer; color:#ccc; font-size:16px; line-height:1; padding:0 0 0 8px; transition:color .15s; flex-shrink:0; }
+        .emp-chip .remove-btn:hover { color:#dc3545; }
+
+        .emp-panel-footer { display:flex; align-items:center; justify-content:space-between; margin-top:14px; padding-top:14px; border-top:1px solid #eee; font-size:12px; color:#999; flex-wrap:wrap; gap:10px; }
+
+        /* ── Input Section ── */
+        .input-section { background:white; padding:20px; border-radius:0 0 15px 15px; box-shadow:0 4px 6px rgba(0,0,0,.1); margin-bottom:20px; }
+        .input-section textarea { width:100%; height:280px; padding:15px; border:2px solid #e0e0e0; border-radius:10px; font-size:14px; font-family:monospace; resize:vertical; margin-bottom:15px; line-height:1.5; }
+        .input-section textarea:focus { outline:none; border-color:#1a4d8c; }
+        .button-group { display:flex; gap:10px; flex-wrap:wrap; }
+
+        .btn { padding:10px 20px; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s; }
+        .btn-primary   { background:#1a4d8c; color:white; } .btn-primary:hover   { background:#0d3a6b; }
+        .btn-secondary { background:#e0e0e0; color:#333;  } .btn-secondary:hover { background:#d0d0d0; }
+        .btn-success   { background:#27ae60; color:white; } .btn-success:hover   { background:#219a52; }
+        .btn-info      { background:#17a2b8; color:white; } .btn-info:hover      { background:#138496; }
+        .btn-danger    { background:#dc3545; color:white; } .btn-danger:hover    { background:#b02a37; }
+
+        /* ── View filter tabs ── */
+        .view-tabs { display:flex; gap:0; margin-bottom:0; border-radius:10px 10px 0 0; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,.08); }
+        .view-tab {
+            flex:1; padding:14px; text-align:center; font-size:14px; font-weight:600;
+            cursor:pointer; background:#e9ecef; color:#555; border:none;
+            transition:background .2s, color .2s; position:relative;
+        }
+        .view-tab .tab-count { font-size:11px; font-weight:700; margin-left:6px; padding:2px 7px; border-radius:20px; background:rgba(0,0,0,.1); }
+        .view-tab.active-all        { background:#2c3e50; color:white; }
+        .view-tab.active-annotation { background:#1a4d8c; color:white; }
+        .view-tab.active-assessment { background:#c0631a; color:white; }
+
+        /* ── Stats ── */
+        .stats-wrapper { background:white; border-radius:0; padding:16px 16px 0; border-top:1px solid #dee2e6; }
+        .team-stats-label { font-size:12px; font-weight:700; text-transform:uppercase; color:#999; letter-spacing:.5px; margin-bottom:10px; }
+        .stats-container { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+        .stat-card { background:#f8f9fa; padding:16px; border-radius:10px; text-align:center; border:1px solid #eee; }
+        .stat-card h3 { color:#888; font-size:11px; margin-bottom:8px; text-transform:uppercase; letter-spacing:.4px; }
+        .stat-card .value { font-size:28px; font-weight:bold; color:#1a4d8c; }
+        .stat-card .value.complete   { color:#27ae60; }
+        .stat-card .value.incomplete { color:#e67e22; }
+        .stat-card .value.leave      { color:#6c757d; }
+        .stat-card .value.missing    { color:#dc3545; }
+
+        /* ── Table ── */
+        .table-container { background:white; border-radius:0 0 10px 10px; box-shadow:0 2px 4px rgba(0,0,0,.1); overflow:auto; max-height:600px; }
+        table { width:100%; border-collapse:collapse; }
+        th { background:#f8f9fa; color:#333; font-weight:600; font-size:13px; padding:14px 15px; text-align:left; border-bottom:2px solid #dee2e6; position:sticky; top:0; z-index:10; }
+        td { padding:11px 15px; border-bottom:1px solid #e0e0e0; font-size:14px; }
+        tr:hover td { background:#f5f5f5; }
+
+        /* Team row divider */
+        .team-header-row td { background:#f0f2f5; font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.5px; padding:8px 15px; color:#555; border-bottom:2px solid #dee2e6; }
+        .team-header-row.annotation td { background:#e8f0fe; color:#1a4d8c; }
+        .team-header-row.assessment td { background:#fef3e8; color:#c0631a; }
+
+        .status-badge    { padding:4px 8px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block; }
+        .status-complete   { background:#d4edda; color:#155724; }
+        .status-incomplete { background:#fff3cd; color:#856404; }
+        .status-leave      { background:#e2e3e5; color:#383d41; }
+        .status-missing    { background:#f8d7da; color:#721c24; }
+        .time-badge { background:#e9ecef; padding:4px 8px; border-radius:15px; font-size:12px; }
+        .team-badge { padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600; display:inline-block; }
+        .team-badge.annotation { background:#e8f0fe; color:#1a4d8c; }
+        .team-badge.assessment { background:#fef3e8; color:#c0631a; }
+
+        .footer { text-align:center; margin-top:20px; color:#666; font-size:13px; }
+        .debug-info { background:#f8f9fa; padding:10px; margin:10px 0; border-radius:5px; font-size:12px; color:#666; max-height:200px; overflow:auto; display:none; border:1px solid #dee2e6; font-family:monospace; }
+
+        /* ── Toast ── */
+        .toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:#2c3e50; color:white; padding:12px 24px; border-radius:30px; font-size:14px; box-shadow:0 4px 12px rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .3s; z-index:9999; }
+        .toast.show { opacity:1; }
+
+        /* ── Modal ── */
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:1000; align-items:center; justify-content:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:white; border-radius:12px; padding:28px 32px; max-width:420px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,.2); text-align:center; }
+        .modal h3 { font-size:18px; margin-bottom:10px; color:#2c3e50; }
+        .modal p  { font-size:14px; color:#666; margin-bottom:22px; line-height:1.5; }
+        .modal-btns { display:flex; gap:12px; justify-content:center; }
+
+        /* ── Select styling ── */
+        .team-select { padding:10px 14px; border:2px solid #e0e0e0; border-radius:8px; font-size:14px; background:white; cursor:pointer; }
+        .team-select:focus { outline:none; border-color:#1a4d8c; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v3.0</span></h1>
+        <p>Tracks both Data Annotation and Data Assessment teams from a single Slack log paste</p>
+    </div>
+
+    <!-- ══ Employee Management Panel ══ -->
+    <div class="emp-panel">
+        <div class="emp-panel-header" id="empPanelToggle">
+            <h2>👥 Manage Employees <span class="emp-count" id="empCount">0</span></h2>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="emp-panel-body" id="empPanelBody">
+            <!-- Team selector tabs -->
+            <div class="team-tabs">
+                <div class="team-tab active-annotation" id="tabAnnotation" data-team="annotation">🔵 Data Annotation (<span id="countAnnotation">0</span>)</div>
+                <div class="team-tab" id="tabAssessment" data-team="assessment">🟠 Data Assessment / DA (<span id="countAssessment">0</span>)</div>
+            </div>
+
+            <div class="add-emp-row">
+                <input type="text" id="newEmpInput" placeholder="Type name and press Enter or click Add…" maxlength="80" />
+                <select class="team-select" id="newEmpTeam">
+                    <option value="annotation">Data Annotation</option>
+                    <option value="assessment">Data Assessment / DA</option>
+                </select>
+                <button class="btn btn-primary" id="addEmpBtn">➕ Add</button>
+            </div>
+
+            <div class="emp-grid" id="empGrid"></div>
+
+            <div class="emp-panel-footer">
+                <span>💾 Changes save automatically in your browser.</span>
+                <button class="btn btn-danger" id="resetEmpBtn" style="font-size:12px;padding:6px 14px;">↩ Reset to Defaults</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ Slack Input ══ -->
+    <div class="input-section">
+        <textarea id="slackInput" placeholder="Paste Slack messages here — both teams together is fine…"></textarea>
+        <div class="button-group">
+            <button class="btn btn-primary"   id="processBtn">🔍 Process Messages</button>
+            <button class="btn btn-secondary" id="clearBtn">🗑️ Clear</button>
+            <button class="btn btn-success"   id="sample1Btn">📋 Format 1</button>
+            <button class="btn btn-info"      id="sample2Btn">📋 Format 2</button>
+            <button class="btn btn-secondary" id="exportBtn">📥 Export CSV</button>
+            <button class="btn btn-secondary" id="debugBtn">🐛 Debug</button>
+        </div>
+        <div class="debug-info" id="debugInfo"></div>
+    </div>
+
+    <!-- ══ View Tabs ══ -->
+    <div class="view-tabs" id="viewTabs" style="display:none;">
+        <button class="view-tab active-all" data-view="all">📊 All Employees <span class="tab-count" id="tcAll">0</span></button>
+        <button class="view-tab" data-view="annotation">🔵 Data Annotation <span class="tab-count" id="tcAnnotation">0</span></button>
+        <button class="view-tab" data-view="assessment">🟠 Data Assessment / DA <span class="tab-count" id="tcAssessment">0</span></button>
+    </div>
+
+    <!-- ══ Stats + Table ══ -->
+    <div id="resultsArea" style="display:none;">
+        <div class="stats-wrapper">
+            <div class="team-stats-label" id="statsLabel">Overall</div>
+            <div class="stats-container" id="statsContainer"></div>
+        </div>
+        <div class="table-container">
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <div class="footer"><span id="lastUpdated"></span></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <h3 id="modalTitle">Confirm</h3>
+        <p id="modalMsg"></p>
+        <div class="modal-btns">
+            <button class="btn btn-secondary" id="modalCancel">Cancel</button>
+            <button class="btn btn-danger"    id="modalConfirm">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+//  DEFAULT EMPLOYEES  (team-aware structure)
+// ════════════════════════════════════════════════════════════════
+const DEFAULT_TEAMS = {
+    annotation: [
+        "Ramyashree Ragupathy","Manoj kumar","Kalyani Dande","Sandhya D","Koteswari","Hari","Uma",
+        "Manjunath Bandihal","Akshay Phatale","Maitra Salimath","YATHISH GOWDA KH","Pavan Yeddala",
+        "sabarmathi","G umesh","Shilpa E","Prema Joshi","Keerti Doddwad","Ajayreddy","Varun Kumar H N",
+        "Sneha B V","Fathima Reneesha P","Vishruthi Raghu","Sanjana G P","Dhanyasri as","Siddharth Anandan",
+        "Bindu Sree","Anilkumar","Mihir","Suzan John","Umesh Barker","HR SUNIL KUMAR","Shanta mantri",
+        "Nandini Keni","Shweta k","Kishore Devaragudi","ANIL GANDREDDI","K Ganesh","kirany","Vishwas Reddy"
+    ],
+    assessment: [
+        "Sandhya K","Venkatesh Chilukuri","Gowthami TP","Jagadish","kaushik","Ishika","Ramyashree A",
+        "Jobin Johnson","Divya K","Sujan Debnath","Sajina NM","Shivaranjani Hiremath","M.Sarvani",
+        "vengatesan","V Srividhya","sunkavalli Gayatri","Aashvi"
+    ]
+};
+
+const LS_KEY = 'slackTracker_teams_v1';
+
+// teams = { annotation: [...], assessment: [...] }
+let teams = { annotation: [], assessment: [] };
+let activeEmpTab = 'annotation'; // which team tab is showing in manage panel
+let activeViewTab = 'all';       // which results tab is active
+let lastReport = [];             // full report from last process run
+
+// ════════════════════════════════════════════════════════════════
+//  PERSISTENCE
+// ════════════════════════════════════════════════════════════════
+function loadEmployees() {
+    try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw) { const p = JSON.parse(raw); if (p && p.annotation && p.assessment) { teams = p; return; } }
+    } catch(e) {}
+    teams = { annotation:[...DEFAULT_TEAMS.annotation], assessment:[...DEFAULT_TEAMS.assessment] };
+}
+function saveEmployees() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(teams)); } catch(e) {}
+}
+
+// All employees as flat array (for parser matching)
+function allEmployees() { return [...teams.annotation, ...teams.assessment]; }
+
+// Get team for a name (returns 'annotation'|'assessment'|null)
+function getTeam(name) {
+    const n = norm(name);
+    if (teams.annotation.some(e => norm(e)===n)) return 'annotation';
+    if (teams.assessment.some(e => norm(e)===n)) return 'assessment';
+    return null;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  EMPLOYEE MANAGEMENT UI
+// ════════════════════════════════════════════════════════════════
+function renderEmpGrid() {
+    const grid = document.getElementById('empGrid');
+    const list = [...teams[activeEmpTab]].sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
+
+    document.getElementById('countAnnotation').textContent = teams.annotation.length;
+    document.getElementById('countAssessment').textContent = teams.assessment.length;
+    document.getElementById('empCount').textContent = teams.annotation.length + teams.assessment.length;
+
+    if (!list.length) {
+        grid.innerHTML = '<p style="color:#bbb;font-size:13px;grid-column:1/-1;padding:10px 0;">No employees in this team yet.</p>';
+    } else {
+        grid.innerHTML = list.map(name => `
+            <div class="emp-chip ${activeEmpTab}">
+                <span class="emp-name" title="${esc(name)}">${esc(name)}</span>
+                <button class="remove-btn" data-name="${esc(name)}" title="Remove">✕</button>
+            </div>`).join('');
+        grid.querySelectorAll('.remove-btn').forEach(btn =>
+            btn.addEventListener('click', () => confirmRemove(btn.dataset.name, activeEmpTab))
+        );
+    }
+
+    // Sync team select dropdown with active tab
+    document.getElementById('newEmpTeam').value = activeEmpTab;
+}
+
+function switchEmpTab(team) {
+    activeEmpTab = team;
+    document.getElementById('tabAnnotation').className = 'team-tab' + (team==='annotation' ? ' active-annotation' : '');
+    document.getElementById('tabAssessment').className = 'team-tab' + (team==='assessment' ? ' active-assessment' : '');
+    renderEmpGrid();
+}
+
+function addEmployee() {
+    const input  = document.getElementById('newEmpInput');
+    const team   = document.getElementById('newEmpTeam').value;
+    const name   = input.value.trim();
+    input.classList.remove('shake');
+
+    if (!name) { void input.offsetWidth; input.classList.add('shake'); input.focus(); return; }
+
+    const allNames = allEmployees();
+    if (allNames.some(e => e.toLowerCase()===name.toLowerCase())) {
+        showToast(`⚠️ "${name}" already exists`); input.select(); return;
+    }
+
+    teams[team].push(name);
+    saveEmployees();
+    switchEmpTab(team); // switch to the tab we just added to
+    input.value = ''; input.focus();
+    showToast(`✅ "${name}" added to ${teamLabel(team)}`);
+}
+
+function confirmRemove(name, team) {
+    openModal('Remove Employee',
+        `Remove <strong>${esc(name)}</strong> from <strong>${teamLabel(team)}</strong>?`,
+        () => {
+            teams[team] = teams[team].filter(e => e !== name);
+            saveEmployees(); renderEmpGrid();
+            showToast(`🗑️ "${name}" removed`);
+        }
+    );
+}
+
+function resetToDefaults() {
+    openModal('Reset to Defaults', 'Replace both team lists with the original default employees?', () => {
+        teams = { annotation:[...DEFAULT_TEAMS.annotation], assessment:[...DEFAULT_TEAMS.assessment] };
+        saveEmployees(); renderEmpGrid();
+        showToast('↩ Reset to defaults');
+    });
+}
+
+function teamLabel(t) { return t==='annotation' ? 'Data Annotation' : 'Data Assessment / DA'; }
+
+// ════════════════════════════════════════════════════════════════
+//  TOAST  &  MODAL
+// ════════════════════════════════════════════════════════════════
+let _tt=null;
+function showToast(msg) {
+    const t=document.getElementById('toast'); t.innerHTML=msg; t.classList.add('show');
+    clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600);
+}
+let _mcb=null;
+function openModal(title,msg,cb) {
+    document.getElementById('modalTitle').textContent=title;
+    document.getElementById('modalMsg').innerHTML=msg;
+    document.getElementById('modalOverlay').classList.add('open');
+    _mcb=cb;
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); _mcb=null; }
+
+// ════════════════════════════════════════════════════════════════
+//  SAMPLE DATA
+// ════════════════════════════════════════════════════════════════
+const sampleData1 = `Ramyashree Ragupathy  [8:59 AM]
+In working on car parts updates
+Koteswari  [9:09 AM]
+Working on all_new_car_parts _rear bumper review.
+Anilkumar  [9:09 AM]
+Working on all_new_car_parts_rear_bumper annotation.
+Manoj kumar  [9:13 AM]
+Working on volvo_pov_damage_2 Annotation.
+Hari  [9:19 AM]
+In working on VOLVO_POV_damage Review.
+Sandhya D  [9:23 AM]
+Working on Hegic-cases-SDBM-Feb10-Feb13 review
+Kalyani Dande  [9:24 AM]
+Working on all_new_car_parts_rear_bumper annotation.
+Uma  [9:29 AM]
+Working on all new car parts annotation.
+Suzan John  [9:35 AM]
+Working on all_new_car_parts_rear_bumper annotation.
+Ajayreddy  [9:36 AM]
+Working on volvo_pov_damage_2 Annotation.
+Mihir  [9:39 AM]
+Working on Hegic-cases-SDBM-Feb10-Feb13 annotation.
+Koteswari  [6:11 PM]
+Worked on all_new_car_parts _rear bumper review.
+Anilkumar  [6:11 PM]
+Worked on all_new_car_parts_rear_bumper annotation.
+Hari  [6:18 PM]
+Worked on VOLVO_POV_damage Review.
+Manoj kumar  [6:21 PM]
+Worked on  volvo_pov_damage_2  Annotation.
+Sandhya D  [6:24 PM]
+Worked on Hegic-cases-SDBM-Feb10-Feb13 review and all_new_car_parts_rear_bumper annotation.
+Kalyani Dande  [6:25 PM]
+Worked on all_new_car_parts_rear_bumper annotation.
+Ajayreddy  [6:30 PM]
+Worked on  volvo_pov_damage_2  Annotation.
+Uma  [6:30 PM]
+Worked on all new car parts annotation.
+Ramyashree Ragupathy  [6:37 PM]
+Worked on car parts updates
+Suzan John  [6:38 PM]
+Worked on all_new_car_parts_rear_bumper annotation.
+Mihir  [7:05 PM]
+Worked on Hegic-cases-SDBM-Feb10-Feb13 review.`;
+
+const sampleData2 = `Ishika  [7:16 AM]
+Login - Working on:
+ • Production portals
+Work hours:
+ • 07:00 AM to 11:00 AM
+Remarks: Nil
+Jobin Johnson  [8:00 AM]
+Login - Working on:
+Work hours:
+ 08:00 AM to 09.30 AM
+Remarks: Nil
+Jagadish  [8:04 AM]
+Logout - Worked on:
+    • Pilot Portals
+Remarks: Worked on SDBM report
+kaushik  [8:31 AM]
+Login - Working on:
+ • Production portals
+Work hours:
+ • 08:30 AM to 10:00 AM
+Remarks: Nil
+Sandhya K  [9:01 AM]
+On leave
+sunkavalli Gayatri  [9:28 AM]
+Login - Working on:
+ • Production portal
+Work hours:
+ • 09:30 AM to 01:00 PM
+Remarks: Nil
+Gowthami TP  [9:29 AM]
+Login - Working on:
+Pilot Portals
+Remarks: Nil
+Sajina NM  [9:32 AM]
+Login - Working on:
+• Production portals
+Work hours:
+• 09:30AM to 03:30PM
+Remarks: Nil
+vengatesan  [9:56 AM]
+On leave
+M.Sarvani  [10:01 AM]
+Login-Working on:
+•Production portals
+Remarks:Nil
+Divya K  [10:59 AM]
+Login - Working on:
+• Production portals
+Remarks: Nil
+Ishika  [5:33 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: worked half an hour extra.
+Jobin Johnson  [5:36 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: Pilots Portals
+Gowthami TP  [6:30 PM]
+Logout - Worked on:
+    • Pilot Portals
+Remarks: Worked on SDBM report
+kaushik  [6:30 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: worked 30 mins extra.
+Sajina NM  [6:33 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: NIL
+sunkavalli Gayatri  [7:01 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: Extended work by 30 minutes
+M.Sarvani  [7:35 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: 30mins extra work.
+Divya K  [8:31 PM]
+Logout - Worked on:
+    • Production Portals
+ Remarks: worked half an hour extra.`;
+
+// ════════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════════
+let _dbg=[];
+function addDebug(m){_dbg.push(m);}
+function clearDebug(){_dbg=[];}
+function flushDebug(){document.getElementById('debugInfo').innerHTML=_dbg.join('<br>');}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function norm(n){return n.trim().toLowerCase().replace(/\s+/g,' ');}
+
+function findEmployee(rawName) {
+    const n = norm(rawName);
+    const all = allEmployees();
+    return all.find(e=>norm(e)===n) || all.find(e=>n.includes(norm(e))||norm(e).includes(n)) || rawName;
+}
+
+function timeToMinutes(str) {
+    if (!str) return null;
+    str=str.trim().toUpperCase().replace(/\./g,':').replace(/\s+/g,' ').replace(/(\d)([AP]M)/,'$1 $2');
+    const pm=str.includes('PM'),am=str.includes('AM');
+    str=str.replace(/[AP]M/,'').trim();
+    let [h,m]=str.split(':'); h=parseInt(h,10); m=parseInt(m,10)||0;
+    if(isNaN(h))return null;
+    if(pm&&h!==12)h+=12; if(am&&h===12)h=0;
+    return h*60+m;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PARSER
+// ════════════════════════════════════════════════════════════════
+function parseMessages(rawText) {
+    clearDebug(); addDebug('=== Parsing ===');
+    const lines=rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const headerRe=/^(.+?)\s+\[(\d{1,2}:\d{2}\s*[AP]M)\]\s*$/i;
+    const msgs=[]; let cur=null;
+
+    function flush() {
+        if (!cur) return;
+        const body=cur.lines.join('\n');
+        if (/\bon\s+leave\b/i.test(body))                                                  { msgs.push({name:cur.name,type:'leave'}); return; }
+        if (/\b(in\s+working|working\s+on)\b/i.test(body)||/\blogin\b/i.test(body))       { msgs.push({name:cur.name,type:'login', time:cur.time}); return; }
+        if (/\bworked\s+on\b/i.test(body)||/\blogout\b/i.test(body))                      { msgs.push({name:cur.name,type:'logout',time:cur.time}); return; }
+    }
+
+    for (const rawLine of lines) {
+        const line=rawLine.trim(); if(!line)continue;
+        const hm=line.match(headerRe);
+        if (hm) { flush(); cur={name:findEmployee(hm[1].trim()), time:hm[2].replace(/\s+/g,' '), lines:[]}; }
+        else if (cur) { cur.lines.push(line); if(/\bon\s+leave\b/i.test(line)){flush();cur=null;} }
+    }
+    flush();
+    addDebug(`Total events: ${msgs.length}`); flushDebug();
+    return msgs;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  REPORT BUILDER  (now includes team field)
+// ════════════════════════════════════════════════════════════════
+function buildReport(msgs) {
+    const state = {};
+    allEmployees().forEach(n => { state[n]={logins:[],logouts:[],onLeave:false}; });
+
+    msgs.forEach(m => {
+        const s=state[m.name]; if(!s)return;
+        if(m.type==='leave')  s.onLeave=true;
+        if(m.type==='login')  s.logins.push(m.time);
+        if(m.type==='logout') s.logouts.push(m.time);
+    });
+
+    return Object.keys(state).sort().map(name => {
+        const s=state[name];
+        const team=getTeam(name)||'annotation';
+
+        if (s.onLeave) return {name,team,login:'-',logout:'-',workingHours:'-',status:'On Leave',statusClass:'status-leave',icon:'📅'};
+
+        const login  = s.logins.sort( (a,b)=>(timeToMinutes(a)||0)-(timeToMinutes(b)||0))[0]||null;
+        const logout = s.logouts.sort((a,b)=>(timeToMinutes(b)||0)-(timeToMinutes(a)||0))[0]||null;
+
+        let hours='-';
+        if (login&&logout) { const d=timeToMinutes(logout)-timeToMinutes(login); hours=((d<0?d+1440:d)/60).toFixed(2)+' hrs'; }
+
+        const status      = login&&logout?'Complete':(login||logout)?'Incomplete':'Missing';
+        const statusClass = {Complete:'status-complete',Incomplete:'status-incomplete',Missing:'status-missing'}[status];
+        const icon        = {Complete:'✅',Incomplete:'⚠️',Missing:'❓'}[status];
+        return {name,team,login:login||'❌ No login',logout:logout||'❌ No logout',workingHours:hours,status,statusClass,icon};
+    });
+}
+
+// ════════════════════════════════════════════════════════════════
+//  STATS
+// ════════════════════════════════════════════════════════════════
+function calcStats(rows) {
+    const total=rows.length;
+    const comp  =rows.filter(r=>r.status==='Complete').length;
+    const inc   =rows.filter(r=>r.status==='Incomplete').length;
+    const leave =rows.filter(r=>r.status==='On Leave').length;
+    const miss  =rows.filter(r=>r.status==='Missing').length;
+    const rate  =total?((comp/total)*100).toFixed(1):'0';
+    return {total,comp,inc,leave,miss,rate};
+}
+
+function renderStats(rows) {
+    const s=calcStats(rows);
+    document.getElementById('statsContainer').innerHTML=`
+        <div class="stat-card"><h3>Total</h3><div class="value">${s.total}</div></div>
+        <div class="stat-card"><h3>✅ Complete</h3><div class="value complete">${s.comp}</div></div>
+        <div class="stat-card"><h3>⚠️ Incomplete</h3><div class="value incomplete">${s.inc}</div></div>
+        <div class="stat-card"><h3>📅 On Leave</h3><div class="value leave">${s.leave}</div></div>
+        <div class="stat-card"><h3>❌ Missing</h3><div class="value missing">${s.miss}</div></div>
+        <div class="stat-card"><h3>Completion Rate</h3><div class="value">${s.rate}%</div></div>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  TABLE RENDER  (view = 'all' | 'annotation' | 'assessment')
+// ════════════════════════════════════════════════════════════════
+function renderView(view) {
+    activeViewTab = view;
+
+    // Update tab styles
+    document.querySelectorAll('.view-tab').forEach(t => {
+        const v=t.dataset.view;
+        t.className='view-tab'+(v===view?' active-'+view:'');
+    });
+
+    const filtered = view==='all' ? lastReport : lastReport.filter(r=>r.team===view);
+    const label = view==='all'?'All Employees (Both Teams)': view==='annotation'?'Data Annotation Team':'Data Assessment / DA Team';
+    document.getElementById('statsLabel').textContent=label;
+    renderStats(filtered);
+
+    if (!filtered.length) { document.getElementById('tableContainer').innerHTML='<p style="padding:20px;color:#aaa;">No employees in this view.</p>'; return; }
+
+    let rows='';
+    if (view==='all') {
+        // Group by team with headers
+        const ann=filtered.filter(r=>r.team==='annotation');
+        const ass=filtered.filter(r=>r.team==='assessment');
+        rows += `<tr class="team-header-row annotation"><td colspan="5">🔵 Data Annotation Team (${ann.length} employees)</td></tr>`;
+        rows += ann.map(r=>empRow(r,false)).join('');
+        rows += `<tr class="team-header-row assessment"><td colspan="5">🟠 Data Assessment / DA Team (${ass.length} employees)</td></tr>`;
+        rows += ass.map(r=>empRow(r,false)).join('');
+    } else {
+        rows = filtered.map(r=>empRow(r,false)).join('');
+    }
+
+    document.getElementById('tableContainer').innerHTML=`
+        <table>
+            <thead><tr>
+                <th>Employee</th>
+                ${view==='all'?'<th>Team</th>':''}
+                <th>Status</th><th>Login Time</th><th>Logout Time</th><th>Working Hours</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+function empRow(e, showTeam) {
+    const teamCell = showTeam ? `<td><span class="team-badge ${e.team}">${e.team==='annotation'?'Annotation':'Assessment'}</span></td>` : '';
+    return `<tr>
+        <td><strong>${esc(e.name)}</strong></td>
+        ${teamCell}
+        <td><span class="status-badge ${e.statusClass}">${e.icon} ${e.status}</span></td>
+        <td><span class="time-badge">${e.login}</span></td>
+        <td><span class="time-badge">${e.logout}</span></td>
+        <td><strong>${e.workingHours}</strong></td>
+    </tr>`;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ACTIONS
+// ════════════════════════════════════════════════════════════════
+function processMessages() {
+    const input=document.getElementById('slackInput').value.trim();
+    if (!input) { alert('Please paste some Slack messages first!'); return; }
+    const msgs=parseMessages(input);
+    if (!msgs.length) { alert('No valid messages detected. Please check the format.'); return; }
+
+    lastReport=buildReport(msgs);
+
+    // Update tab counts
+    const ann=lastReport.filter(r=>r.team==='annotation');
+    const ass=lastReport.filter(r=>r.team==='assessment');
+    document.getElementById('tcAll').textContent=lastReport.length;
+    document.getElementById('tcAnnotation').textContent=ann.length;
+    document.getElementById('tcAssessment').textContent=ass.length;
+
+    document.getElementById('viewTabs').style.display='flex';
+    document.getElementById('resultsArea').style.display='block';
+
+    renderView(activeViewTab);
+    document.getElementById('lastUpdated').textContent=`✓ Last updated: ${new Date().toLocaleString()}`;
+}
+
+function clearAll() {
+    document.getElementById('slackInput').value='';
+    document.getElementById('viewTabs').style.display='none';
+    document.getElementById('resultsArea').style.display='none';
+    document.getElementById('lastUpdated').textContent='';
+    lastReport=[];
+    clearDebug(); document.getElementById('debugInfo').innerHTML='';
+}
+
+function exportToCSV() {
+    if (!lastReport.length) { alert('Process messages first!'); return; }
+    const view=activeViewTab;
+    const rows=view==='all'?lastReport:lastReport.filter(r=>r.team===view);
+    let csv='Employee,Team,Status,Login Time,Logout Time,Working Hours\n';
+    rows.forEach(r=>{ csv+=`"${r.name}","${teamLabel(r.team)}","${r.status}","${r.login}","${r.logout}","${r.workingHours}"\n`; });
+    const a=Object.assign(document.createElement('a'),{
+        href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+        download:`slack-attendance-${view}-${new Date().toISOString().split('T')[0]}.csv`
+    });
+    a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
+    loadEmployees();
+    renderEmpGrid();
+
+    // Employee panel toggle
+    document.getElementById('empPanelToggle').addEventListener('click', () => {
+        document.getElementById('empPanelToggle').classList.toggle('open');
+        document.getElementById('empPanelBody').classList.toggle('open');
+    });
+
+    // Team tabs inside manage panel
+    document.getElementById('tabAnnotation').addEventListener('click', ()=>switchEmpTab('annotation'));
+    document.getElementById('tabAssessment').addEventListener('click', ()=>switchEmpTab('assessment'));
+
+    // Sync select → tab when changed directly
+    document.getElementById('newEmpTeam').addEventListener('change', e=>switchEmpTab(e.target.value));
+
+    // Add employee
+    document.getElementById('addEmpBtn').addEventListener('click', addEmployee);
+    document.getElementById('newEmpInput').addEventListener('keydown', e=>{ if(e.key==='Enter')addEmployee(); });
+
+    // Reset
+    document.getElementById('resetEmpBtn').addEventListener('click', resetToDefaults);
+
+    // Modal
+    document.getElementById('modalConfirm').addEventListener('click', ()=>{ if(_mcb)_mcb(); closeModal(); });
+    document.getElementById('modalCancel').addEventListener('click', closeModal);
+    document.getElementById('modalOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('modalOverlay'))closeModal(); });
+
+    // View tabs (results)
+    document.querySelectorAll('.view-tab').forEach(t=>{
+        t.addEventListener('click', ()=>renderView(t.dataset.view));
+    });
+
+    // Main buttons
+    document.getElementById('processBtn').addEventListener('click', processMessages);
+    document.getElementById('clearBtn').addEventListener('click', clearAll);
+    document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+    document.getElementById('debugBtn').addEventListener('click', ()=>{
+        const d=document.getElementById('debugInfo');
+        d.style.display=d.style.display==='block'?'none':'block';
+    });
+    document.getElementById('sample1Btn').addEventListener('click', ()=>{ document.getElementById('slackInput').value=sampleData1; processMessages(); });
+    document.getElementById('sample2Btn').addEventListener('click', ()=>{ document.getElementById('slackInput').value=sampleData2; processMessages(); });
+});
+</script>
+</body>
+</html>
