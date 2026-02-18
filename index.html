@@ -188,7 +188,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.0</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.1</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -357,7 +357,7 @@
 //  ⚙️  SUPABASE CONFIG  — paste your keys here
 // ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://tfapnbvrquswjzogdhbh.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_VcT6pNqY6tO0jwBgBkOqQQ_ie4JPHdD';  // ← replace this with the long eyJ... key
+const SUPABASE_KEY = 'PASTE_YOUR_ANON_KEY_HERE';  // ← replace this with the long eyJ... key
 const TABLE = 'violation_history';
 
 // ══════════════════════════════════════════════════════════════
@@ -365,46 +365,78 @@ const TABLE = 'violation_history';
 // ══════════════════════════════════════════════════════════════
 async function sbFetch(path, opts={}){
     const url = SUPABASE_URL + '/rest/v1/' + path;
+    // Build headers — Prefer must be set explicitly per call
+    const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+    };
+    if(opts.prefer) headers['Prefer'] = opts.prefer;
+    if(opts.headers) Object.assign(headers, opts.headers);
+
     const res = await fetch(url, {
-        ...opts,
-        headers:{
-            'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': opts.prefer || '',
-            ...(opts.headers||{})
-        }
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body || undefined
     });
     if(!res.ok){
         const err = await res.text();
-        throw new Error(err);
+        throw new Error(`Supabase error ${res.status}: ${err}`);
     }
     const text = await res.text();
     return text ? JSON.parse(text) : [];
 }
 
+// Load all rows sorted by date
 async function dbLoad(){
-    return sbFetch(TABLE + '?order=date.asc');
+    return sbFetch(TABLE + '?order=date.asc&select=*');
 }
 
-async function dbUpsert(row){
-    // upsert by date+name (unique combo)
-    return sbFetch(TABLE + '?on_conflict=date,name', {
-        method:'POST',
-        prefer:'resolution=merge-duplicates',
-        body: JSON.stringify(row)
+// Insert a brand-new row (no id — let Supabase generate uuid)
+async function dbInsert(row){
+    const {id, ...payload} = row; // strip id if present
+    return sbFetch(TABLE, {
+        method: 'POST',
+        prefer: 'return=representation',
+        body: JSON.stringify(payload)
     });
 }
 
-async function dbDelete(date, name){
-    return sbFetch(TABLE + `?date=eq.${encodeURIComponent(date)}&name=eq.${encodeURIComponent(name)}`, {
-        method:'DELETE'
+// Update an existing row by its uuid — used for resolution changes
+async function dbPatch(id, fields){
+    return sbFetch(TABLE + `?id=eq.${id}`, {
+        method: 'PATCH',
+        prefer: 'return=representation',
+        body: JSON.stringify(fields)
     });
+}
+
+// Check if row exists for date+name, then insert or patch
+async function dbUpsertByDateName(row){
+    const existing = dbRows.find(d => d.date === row.date && d.name === row.name);
+    if(existing){
+        // Update existing row — only overwrite non-resolution fields; keep resolution/reason
+        return dbPatch(existing.id, {
+            team: row.team,
+            status: row.status,
+            login: row.login,
+            logout: row.logout,
+            working_hours: row.working_hours,
+            // preserve existing resolution/reason
+            resolution: existing.resolution,
+            reason: existing.reason,
+            resolved_at: existing.resolved_at
+        });
+    } else {
+        const {id, ...payload} = row;
+        return dbInsert(payload);
+    }
 }
 
 async function dbDeleteAll(){
-    return sbFetch(TABLE + '?id=neq.00000000-0000-0000-0000-000000000000', {
-        method:'DELETE'
+    // Delete all rows using a filter that matches everything
+    return sbFetch(TABLE + '?date=gte.0000-00-00', {
+        method: 'DELETE'
     });
 }
 
@@ -469,9 +501,7 @@ async function saveViolationsForDate(dateStr, report){
     const viols = report.filter(r=>r.status==='Missing'||r.status==='Incomplete');
     setSyncStatus('loading','Saving to cloud…');
     try{
-        // For each violation: upsert (preserving existing resolution if already in DB)
         for(const r of viols){
-            const existing = dbRows.find(d=>d.date===dateStr && d.name===r.name);
             const row = {
                 date: dateStr,
                 name: r.name,
@@ -480,38 +510,41 @@ async function saveViolationsForDate(dateStr, report){
                 login: r.login,
                 logout: r.logout,
                 working_hours: r.workingHours,
-                resolution: existing ? existing.resolution : 'violation',
-                reason: existing ? existing.reason : '',
-                resolved_at: existing ? existing.resolved_at : ''
+                resolution: 'violation',
+                reason: '',
+                resolved_at: ''
             };
-            await dbUpsert(row);
+            await dbUpsertByDateName(row);
         }
-        // Reload
         await loadFromCloud();
     } catch(e){
         setSyncStatus('error','❌ Save failed: '+e.message);
+        console.error('saveViolationsForDate error:', e);
     }
 }
 
 // ══════════════════════════════════════════════════════════════
-//  UPDATE RESOLUTION IN CLOUD
+//  UPDATE RESOLUTION IN CLOUD  — uses PATCH by row id (reliable update)
 // ══════════════════════════════════════════════════════════════
 async function saveResolutionToCloud(date, name, resolution, reason){
     setSyncStatus('loading','Saving resolution to cloud…');
     try{
         const existing = dbRows.find(d=>d.date===date && d.name===name);
-        if(!existing) return;
-        const row = {
-            ...existing,
-            resolution,
-            reason,
+        if(!existing || !existing.id){
+            setSyncStatus('error','❌ Record not found in database. Try refreshing.');
+            return;
+        }
+        // Use PATCH by id — this is the most reliable way to update a specific row
+        await dbPatch(existing.id, {
+            resolution: resolution,
+            reason: reason,
             resolved_at: resolution!=='violation' ? new Date().toLocaleString() : ''
-        };
-        await dbUpsert(row);
+        });
         await loadFromCloud();
-        setSyncStatus('ok','✅ Resolution saved and synced.');
+        setSyncStatus('ok','✅ Resolution saved and synced to both users.');
     } catch(e){
-        setSyncStatus('error','❌ Could not save: '+e.message);
+        setSyncStatus('error','❌ Could not save resolution: '+e.message);
+        console.error('saveResolutionToCloud error:', e);
     }
 }
 
