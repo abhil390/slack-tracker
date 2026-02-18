@@ -176,6 +176,17 @@
         .reason-field textarea.required-shake{animation:shake .3s;border-color:#dc3545;}
         .modal-edit-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
 
+        /* date manager */
+        .date-manager{background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:16px;margin-bottom:18px;}
+        .date-manager h4{font-size:13px;font-weight:700;color:#555;margin-bottom:12px;text-transform:uppercase;letter-spacing:.4px;}
+        .date-list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;}
+        .date-row-item{display:flex;align-items:center;justify-content:space-between;background:white;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;flex-wrap:wrap;gap:8px;}
+        .date-row-item:hover{background:#fafafa;}
+        .date-row-label{font-size:14px;font-weight:700;color:#2c3e50;}
+        .date-row-meta{font-size:12px;color:#888;margin-left:8px;}
+        .date-row-actions{display:flex;gap:6px;align-items:center;}
+        .no-dates{color:#aaa;font-size:13px;padding:10px 0;text-align:center;}
+
         .debug-info{background:#f8f9fa;padding:10px;margin:10px 0;border-radius:5px;font-size:12px;color:#666;max-height:200px;overflow:auto;display:none;border:1px solid #dee2e6;font-family:monospace;}
         .footer{text-align:center;margin-top:20px;color:#666;font-size:13px;}
         .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2c3e50;color:white;padding:12px 24px;border-radius:30px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999;}
@@ -188,7 +199,7 @@
 <div class="container">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.4</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.5</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -292,6 +303,12 @@
                 <button class="btn btn-success btn-sm"   id="histExportBtn">📥 Export CSV</button>
                 <button class="btn btn-danger btn-sm"    id="histClearBtn">🗑️ Clear All</button>
             </div>
+            <!-- Date Manager -->
+            <div class="date-manager">
+                <h4>📅 Manage Data by Date — Delete a date and re-enter fresh data</h4>
+                <div class="date-list" id="dateList"></div>
+            </div>
+
             <div id="histContent"></div>
         </div>
     </div>
@@ -459,8 +476,13 @@ async function dbUpsertByDateName(row){
 }
 
 async function dbDeleteAll(){
-    // Delete all rows using a filter that matches everything
     return sbFetch(TABLE + '?date=gte.0000-00-00', {
+        method: 'DELETE'
+    });
+}
+
+async function dbDeleteByDate(dateStr){
+    return sbFetch(TABLE + '?date=eq.' + encodeURIComponent(dateStr), {
         method: 'DELETE'
     });
 }
@@ -621,6 +643,78 @@ function updateHistBadge(){
 }
 
 // ══════════════════════════════════════════════════════════════
+//  DATE MANAGER
+// ══════════════════════════════════════════════════════════════
+function renderDateManager(){
+    const list = document.getElementById('dateList');
+    if(!list) return;
+
+    // Get unique dates sorted newest first
+    const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
+
+    if(!dates.length){
+        list.innerHTML='<div class="no-dates">No data saved yet.</div>';
+        return;
+    }
+
+    list.innerHTML = dates.map(date=>{
+        const rows      = dbRows.filter(r=>r.date===date);
+        const total     = rows.length;
+        const active    = rows.filter(isActive).length;
+        const resolved  = total - active;
+        const metaParts = [];
+        if(active)   metaParts.push(active+' active violation'+(active!==1?'s':''));
+        if(resolved) metaParts.push(resolved+' resolved');
+
+        return `<div class="date-row-item">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+                <span class="date-row-label">📅 ${formatDate(date)}</span>
+                <span class="date-row-meta">(${metaParts.join(' · ')})</span>
+            </div>
+            <div class="date-row-actions">
+                <button class="btn btn-xs btn-secondary" onclick="preloadDate('${date}')"
+                    title="Set this date in the input field so you can re-enter data for it">
+                    ✏️ Re-enter Data
+                </button>
+                <button class="btn btn-xs btn-danger" onclick="confirmDeleteDate('${date}')"
+                    title="Delete all records for this date">
+                    🗑️ Delete
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// Set the report date input to the selected date so user can paste fresh data
+function preloadDate(dateStr){
+    document.getElementById('reportDate').value = dateStr;
+    document.getElementById('slackInput').value = '';
+    // Scroll to top smoothly
+    window.scrollTo({top:0, behavior:'smooth'});
+    showToast('📅 Date set to '+formatDate(dateStr)+' — paste fresh Slack data and click Process.');
+}
+
+// Confirm then delete all records for a specific date
+function confirmDeleteDate(dateStr){
+    openConfirm(
+        'Delete Date',
+        'This will permanently delete <strong>all '+dbRows.filter(r=>r.date===dateStr).length+' records</strong> for <strong>'+formatDate(dateStr)+'</strong>.<br><br>You can then re-enter fresh data for this date.',
+        async ()=>{
+            setSyncStatus('loading','Deleting records for '+formatDate(dateStr)+'…');
+            try{
+                await dbDeleteByDate(dateStr);
+                await loadFromCloud();
+                showToast('🗑️ All records for '+formatDate(dateStr)+' deleted. You can now re-enter fresh data.');
+                // Also set the date input so they can immediately paste fresh data
+                document.getElementById('reportDate').value = dateStr;
+            } catch(e){
+                setSyncStatus('error','❌ Delete failed: '+e.message);
+            }
+        }
+    );
+}
+
+// ══════════════════════════════════════════════════════════════
 //  EDIT MODAL
 // ══════════════════════════════════════════════════════════════
 function openEditModal(date, name){
@@ -682,6 +776,7 @@ function closeEditModal(){ document.getElementById('editOverlay').classList.remo
 // ══════════════════════════════════════════════════════════════
 function renderHistory(filters={}){
     updateHistBadge();
+    renderDateManager();
     const {team='all',type='all',from='',to=''}=filters;
     let violations=[...dbRows];
 
