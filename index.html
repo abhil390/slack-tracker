@@ -395,23 +395,45 @@ async function dbLoad(){
 // Insert a brand-new row (no id — let Supabase generate uuid)
 async function dbInsert(row){
     const {id, ...payload} = row; // strip id if present
-    return sbFetch(TABLE, {
+    const url = SUPABASE_URL + '/rest/v1/' + TABLE;
+    const res = await fetch(url, {
         method: 'POST',
-        prefer: 'return=representation',
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+        },
         body: JSON.stringify(payload)
     });
+    console.log('[dbInsert] response status='+res.status);
+    if(!res.ok){
+        const err = await res.text();
+        throw new Error('INSERT failed '+res.status+': '+err);
+    }
+    return true;
 }
 
 // Update an existing row by its uuid — used for resolution changes
-async function dbPatch(id, fields){
-    console.log('[dbPatch] PATCH to id='+id, fields);
-    const result = await sbFetch(TABLE + '?id=eq.' + id, {
+async function dbPatch(rowId, fields){
+    console.log('[dbPatch] PATCH id='+rowId, fields);
+    const url = SUPABASE_URL + '/rest/v1/' + TABLE + '?id=eq.' + rowId;
+    const res = await fetch(url, {
         method: 'PATCH',
-        prefer: 'return=representation',
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+        },
         body: JSON.stringify(fields)
     });
-    console.log('[dbPatch] result=', result);
-    return result;
+    console.log('[dbPatch] response status='+res.status);
+    if(!res.ok){
+        const err = await res.text();
+        throw new Error('PATCH failed '+res.status+': '+err);
+    }
+    return true;
 }
 
 // Check if row exists for date+name, then insert or patch
@@ -546,8 +568,7 @@ async function saveResolutionToCloud(date, name, resolution, reason){
         await dbPatch(rowId, {
             resolution:  resolution,
             reason:      reason,
-            resolved_at: resolvedAt,
-            updated_at:  new Date().toISOString()
+            resolved_at: resolvedAt
         });
 
         // STEP 2: Update local cache immediately — no waiting for server reload
