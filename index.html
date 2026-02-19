@@ -202,13 +202,57 @@
         .toast.show{opacity:1;}
         .team-select{padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;cursor:pointer;}
         .team-select:focus{outline:none;border-color:#1a4d8c;}
+        /* ══ LOGIN SCREEN ══ */
+        .login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#1a4d8c 0%,#2c3e50 100%);z-index:9999;display:flex;align-items:center;justify-content:center;}
+        .login-overlay.hidden{display:none;}
+        .login-box{background:white;border-radius:20px;padding:40px 36px;width:90%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center;}
+        .login-logo{font-size:48px;margin-bottom:12px;}
+        .login-box h2{font-size:22px;font-weight:700;color:#2c3e50;margin-bottom:4px;}
+        .login-box p{font-size:13px;color:#888;margin-bottom:28px;}
+        .login-field{text-align:left;margin-bottom:16px;}
+        .login-field label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}
+        .login-field input{width:100%;padding:11px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;transition:border-color .2s;}
+        .login-field input:focus{outline:none;border-color:#1a4d8c;}
+        .login-field input.error{border-color:#dc3545;animation:shake .3s;}
+        .login-btn{width:100%;padding:13px;background:linear-gradient(135deg,#1a4d8c,#2c3e50);color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;transition:opacity .2s;}
+        .login-btn:hover{opacity:.9;}
+        .login-error{color:#dc3545;font-size:13px;margin-top:12px;min-height:18px;font-weight:600;}
+        .login-user-badge{display:inline-flex;align-items:center;gap:6px;background:#e8f0fe;color:#1a4d8c;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;border:none;}
+        .login-user-badge:hover{background:#d2e3fc;}
+        .top-user-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:12px;}
     </style>
 </head>
 <body>
-<div class="container">
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+        <div class="login-logo">📋</div>
+        <h2>Slack Tracker</h2>
+        <p>Please log in to continue</p>
+
+        <div class="login-field">
+            <label for="loginUser">Username</label>
+            <input type="text" id="loginUser" placeholder="Enter your username" autocomplete="username"/>
+        </div>
+        <div class="login-field">
+            <label for="loginPass">Password</label>
+            <input type="password" id="loginPass" placeholder="Enter your password" autocomplete="current-password"/>
+        </div>
+        <button class="login-btn" id="loginBtn">🔐 Login</button>
+        <div class="login-error" id="loginError"></div>
+    </div>
+</div>
+
+<div class="container" id="mainApp" style="display:none;">
 
     <div class="header">
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.6</span></h1>
+        <div class="top-user-bar">
+            <span style="color:rgba(255,255,255,.7);font-size:13px;">Logged in as:</span>
+            <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
+            <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
+        </div>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.7</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -330,7 +374,7 @@
     </div>
 
     <div class="footer"><span id="lastUpdated"></span></div>
-</div>
+</div><!-- end mainApp -->
 
 <div class="toast" id="toast"></div>
 
@@ -405,10 +449,82 @@
 
 <script>
 // ══════════════════════════════════════════════════════════════
+//  👤  USER ACCOUNTS  — change usernames and passwords here
+// ══════════════════════════════════════════════════════════════
+const USERS = [
+    { username: 'admin',   password: 'Admin@123',  displayName: 'Admin' },
+    { username: 'user2',   password: 'User2@456',  displayName: 'User 2' }
+];
+// To add more users, copy a line above and change the details.
+// Example: { username: 'john', password: 'John@789', displayName: 'John' }
+
+const LS_SESSION = 'slackTracker_session';
+
+function checkSession(){
+    try{
+        const s = localStorage.getItem(LS_SESSION);
+        if(s){
+            const parsed = JSON.parse(s);
+            if(parsed && parsed.username && parsed.expires > Date.now()) return parsed;
+        }
+    } catch(e){}
+    return null;
+}
+
+function doLogin(){
+    const username = document.getElementById('loginUser').value.trim();
+    const password = document.getElementById('loginPass').value;
+    const errEl    = document.getElementById('loginError');
+    errEl.textContent = '';
+
+    if(!username || !password){
+        errEl.textContent = 'Please enter both username and password.';
+        return;
+    }
+
+    const user = USERS.find(u =>
+        u.username.toLowerCase() === username.toLowerCase() && u.password === password
+    );
+
+    if(!user){
+        errEl.textContent = '❌ Incorrect username or password.';
+        document.getElementById('loginUser').classList.add('error');
+        document.getElementById('loginPass').classList.add('error');
+        setTimeout(()=>{
+            document.getElementById('loginUser').classList.remove('error');
+            document.getElementById('loginPass').classList.remove('error');
+        }, 800);
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginPass').focus();
+        return;
+    }
+
+    // Save session — expires in 8 hours
+    const session = { username: user.username, displayName: user.displayName, expires: Date.now() + 8*60*60*1000 };
+    localStorage.setItem(LS_SESSION, JSON.stringify(session));
+    showMainApp(session);
+}
+
+function doLogout(){
+    localStorage.removeItem(LS_SESSION);
+    document.getElementById('mainApp').style.display    = 'none';
+    document.getElementById('loginOverlay').classList.remove('hidden');
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginError').textContent = '';
+}
+
+function showMainApp(session){
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('loggedUserBadge').textContent = '👤 ' + session.displayName;
+}
+
+// ══════════════════════════════════════════════════════════════
 //  ⚙️  SUPABASE CONFIG  — paste your keys here
 // ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://tfapnbvrquswjzogdhbh.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_VcT6pNqY6tO0jwBgBkOqQQ_ie4JPHdD';  // ← replace this with the long eyJ... key
+const SUPABASE_KEY = 'PASTE_YOUR_ANON_KEY_HERE';  // ← replace this with the long eyJ... key
 const TABLE = 'violation_history';
 
 // ══════════════════════════════════════════════════════════════
@@ -1291,6 +1407,21 @@ function exportCSV(){
 //  INIT
 // ══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',async function(){
+
+    // ── Check login session ──
+    const session = checkSession();
+    if(session){
+        showMainApp(session);
+    }
+    // Login button & Enter key
+    document.getElementById('loginBtn').addEventListener('click', doLogin);
+    document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+    document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
+    document.getElementById('logoutBtn').addEventListener('click', doLogout);
+
+    // ── Only load app if logged in ──
+    if(!session) return;
+
     loadTeams();renderEmpGrid();
     document.getElementById('reportDate').value=new Date().toISOString().split('T')[0];
     await loadFromCloud();
