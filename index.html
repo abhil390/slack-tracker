@@ -335,7 +335,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.1</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.2</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -960,56 +960,45 @@ async function loadFromCloud(){
 async function saveViolationsForDate(dateStr, report){
     setSyncStatus('loading','Saving to cloud…');
     try{
-        const toInsert = [];
-        const toUpdate = [];
-
-        for(const r of report){
-            const cleanLogin  = r.login  === '❌ No login'  ? '' : (r.login  || '');
-            const cleanLogout = r.logout === '❌ No logout' ? '' : (r.logout || '');
-
-            // Determine resolution:
-            // - violations (Missing/Incomplete/Half Day) → 'violation'
-            // - everyone else (Full Day, On Leave) → 'present'  ← NEW: saved so attendance works
-            const isViol = r.status==='Missing' || r.status==='Incomplete' || r.status==='Half Day';
-            const existing = dbRows.find(d => d.date===dateStr && d.name===r.name);
-
-            const row = {
-                date: dateStr, name: r.name, team: r.team,
-                status: r.status,
-                login: cleanLogin, logout: cleanLogout,
-                working_hours: r.workingHours || '-',
-                // preserve existing resolution/reason if already resolved by user
-                resolution: existing ? (existing.resolution==='violation' && !isViol ? 'present' : existing.resolution || (isViol?'violation':'present')) : (isViol ? 'violation' : 'present'),
-                reason: existing ? (existing.reason || '') : '',
-                resolved_at: existing ? (existing.resolved_at || '') : ''
-            };
-
-            if(existing){
-                toUpdate.push({id: existing.id, row: {
-                    team: row.team, status: row.status,
-                    login: row.login, logout: row.logout, working_hours: row.working_hours,
-                    resolution: row.resolution, reason: row.reason, resolved_at: row.resolved_at
-                }});
-            } else {
-                toInsert.push(row);
-            }
-        }
-
-        // Bulk insert new rows + parallel PATCH existing — both in one await
-        const [inserted] = await Promise.all([
-            toInsert.length ? dbBulkInsertViolations(toInsert) : Promise.resolve([]),
-            Promise.all(toUpdate.map(u => dbPatch(u.id, u.row).catch(e=>console.warn('patch fail',e))))
+        // ── Step 1: Delete ALL existing rows for this date (both tables) ──
+        // This ensures re-processing always starts fresh — no stale resolutions, no ghost records.
+        await Promise.all([
+            dbDeleteByDate(dateStr),
+            sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}).catch(()=>{})
         ]);
 
-        // Update local dbRows cache — no cloud reload needed
-        if(Array.isArray(inserted)) inserted.forEach(row => {
-            const idx = dbRows.findIndex(d=>d.date===row.date&&d.name===row.name);
-            if(idx===-1) dbRows.push(row); else dbRows[idx]=row;
+        // Remove from local cache immediately
+        dbRows = dbRows.filter(r => r.date !== dateStr);
+
+        // ── Step 2: Build fresh rows for every employee ──
+        const fresh = report.map(r => {
+            const cleanLogin  = r.login  === '❌ No login'  ? '' : (r.login  || '');
+            const cleanLogout = r.logout === '❌ No logout' ? '' : (r.logout || '');
+            const isViol = r.status==='Missing' || r.status==='Incomplete' || r.status==='Half Day';
+            return {
+                date:          dateStr,
+                name:          r.name,
+                team:          r.team,
+                status:        r.status,
+                login:         cleanLogin,
+                logout:        cleanLogout,
+                working_hours: r.workingHours || '-',
+                resolution:    isViol ? 'violation' : 'present',  // violations start as unresolved
+                reason:        '',
+                resolved_at:   ''
+            };
         });
-        toUpdate.forEach(u => {
-            const idx = dbRows.findIndex(d=>d.id===u.id);
-            if(idx!==-1) Object.assign(dbRows[idx], u.row);
-        });
+
+        // ── Step 3: Bulk insert all in ONE request ──
+        const inserted = fresh.length ? await dbBulkInsertViolations(fresh) : [];
+
+        // ── Step 4: Update local cache with newly inserted rows (have real IDs now) ──
+        if(Array.isArray(inserted)){
+            inserted.forEach(row => {
+                const idx = dbRows.findIndex(d=>d.date===row.date && d.name===row.name);
+                if(idx===-1) dbRows.push(row); else dbRows[idx]=row;
+            });
+        }
 
         const active = dbRows.filter(r=>r.resolution==='violation').length;
         setSyncStatus('ok','✅ Saved — '+active+' active violation'+(active!==1?'s':'')+' in cloud.');
