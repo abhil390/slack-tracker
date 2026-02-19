@@ -304,7 +304,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.4</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.6</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -770,6 +770,26 @@ async function dbDeleteByDate(dateStr){
     });
 }
 
+// Bulk insert multiple violation_history rows in ONE request
+async function dbBulkInsertViolations(rows){
+    if(!rows.length) return [];
+    const payload = rows.map(({id,...r})=>r);
+    const url = SUPABASE_URL + '/rest/v1/' + TABLE;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'   // return inserted rows so we get their IDs
+        },
+        body: JSON.stringify(payload)
+    });
+    if(!res.ok){ const e=await res.text(); throw new Error('Bulk insert failed: '+e); }
+    const text = await res.text();
+    return text ? JSON.parse(text) : [];
+}
+
 // ── Attendance DB helpers ──
 async function dbLoadAttendance(dateStr){
     return sbFetch(ATTEND_TABLE + '?date=eq.' + encodeURIComponent(dateStr) + '&order=name.asc&select=*');
@@ -862,8 +882,9 @@ async function loadFromCloud(){
     try{
         dbRows = await dbLoad();
         const active = dbRows.filter(r=>r.resolution==='violation').length;
-        setSyncStatus('ok', '✅ Connected — ' + active + ' active violation' + (active!==1?'s':'') + ' | ' + dbRows.length + ' total records. Shared between both users.');
+        setSyncStatus('ok','✅ Connected — '+active+' active violation'+(active!==1?'s':'')+' | '+dbRows.length+' total records.');
         renderHistory(getHistFilters());
+        renderDateManager();
         refreshAttendDateSelect();
     } catch(e){
         setSyncStatus('error','❌ Could not connect to database. Check your API key. — '+e.message);
@@ -874,25 +895,60 @@ async function loadFromCloud(){
 //  SAVE VIOLATIONS TO CLOUD
 // ══════════════════════════════════════════════════════════════
 async function saveViolationsForDate(dateStr, report){
-    const viols = report.filter(r=>r.status==='Missing'||r.status==='Incomplete');
     setSyncStatus('loading','Saving to cloud…');
     try{
+        const viols = report.filter(r => r.status==='Missing' || r.status==='Incomplete' || r.status==='Half Day');
+
+        // Split into: rows that already exist in DB (need PATCH) vs brand new (need INSERT)
+        const toInsert = [];
+        const toUpdate = [];
+
         for(const r of viols){
+            const existing = dbRows.find(d => d.date===dateStr && d.name===r.name);
             const row = {
-                date: dateStr,
-                name: r.name,
-                team: r.team,
-                status: r.status,
-                login: r.login,
-                logout: r.logout,
-                working_hours: r.workingHours,
-                resolution: 'violation',
-                reason: '',
-                resolved_at: ''
+                date: dateStr, name: r.name, team: r.team,
+                status: r.status, login: r.login==='❌ No login'?'':r.login,
+                logout: r.logout==='❌ No logout'?'':r.logout,
+                working_hours: r.workingHours, resolution: 'violation', reason: '', resolved_at: ''
             };
-            await dbUpsertByDateName(row);
+            if(existing){
+                // Only PATCH if fields actually changed — preserve resolution/reason
+                toUpdate.push({id: existing.id, row: {
+                    team: row.team, status: row.status,
+                    login: row.login, logout: row.logout, working_hours: row.working_hours,
+                    resolution: existing.resolution || 'violation',
+                    reason: existing.reason || '', resolved_at: existing.resolved_at || ''
+                }});
+            } else {
+                toInsert.push(row);
+            }
         }
-        await loadFromCloud();
+
+        // Run inserts (bulk, 1 request) and updates (parallel) at the same time
+        const [inserted] = await Promise.all([
+            toInsert.length ? dbBulkInsertViolations(toInsert) : Promise.resolve([]),
+            Promise.all(toUpdate.map(u => dbPatch(u.id, u.row).catch(e=>console.warn('patch fail',e))))
+        ]);
+
+        // Update local dbRows cache immediately — no reload needed
+        // Add newly inserted rows
+        if(Array.isArray(inserted)) inserted.forEach(row => {
+            const idx = dbRows.findIndex(d=>d.date===row.date&&d.name===row.name);
+            if(idx===-1) dbRows.push(row); else dbRows[idx]=row;
+        });
+        // Update patched rows in local cache
+        toUpdate.forEach(u => {
+            const idx = dbRows.findIndex(d=>d.id===u.id);
+            if(idx!==-1) Object.assign(dbRows[idx], u.row);
+        });
+
+        // Re-render history and attendance from updated local cache — no cloud reload
+        const active = dbRows.filter(r=>r.resolution==='violation').length;
+        setSyncStatus('ok','✅ Saved — '+active+' active violation'+(active!==1?'s':'')+' in cloud.');
+        renderHistory(getHistFilters());
+        renderDateManager();
+        refreshAttendDateSelect();
+
     } catch(e){
         setSyncStatus('error','❌ Save failed: '+e.message);
         console.error('saveViolationsForDate error:', e);
@@ -1043,14 +1099,20 @@ function deleteSelectedDate(){
         async ()=>{
             setSyncStatus('loading','Deleting records for '+formatDate(dateStr)+'…');
             try{
-                await dbDeleteByDate(dateStr);
-                // Also delete attendance records for this date
-                const attendForDate = await dbLoadAttendance(dateStr);
-                for(const r of attendForDate){ try{ await dbDeleteAttendance(r.id); } catch(e){} }
-                await loadFromCloud();
-                await refreshAttendDateSelect();
+                // Delete violation_history and attendance_records for this date in parallel
+                await Promise.all([
+                    dbDeleteByDate(dateStr),
+                    sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}).catch(()=>{})
+                ]);
+                // Remove from local cache
+                dbRows = dbRows.filter(r=>r.date!==dateStr);
+                attendRows = attendRows.filter(r=>r.date!==dateStr);
+                renderHistory(getHistFilters());
+                renderDateManager();
+                refreshAttendDateSelect();
                 document.getElementById('reportDate').value = dateStr;
-                showToast('🗑️ Deleted all records for '+formatDate(dateStr)+'. Paste fresh data and click Process.');
+                showToast('🗑️ Deleted records for '+formatDate(dateStr)+'. Paste fresh data and click Process.');
+                setSyncStatus('ok','✅ Date deleted.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
             }
@@ -1588,16 +1650,11 @@ let attendCurrentDate = ''; // currently selected date
 let attendEditId = null;    // id of row being edited (null = new)
 
 // Populate attendance date dropdown — merge violation dates + attendance dates
-async function refreshAttendDateSelect(){
+function refreshAttendDateSelect(){
+    // Dates come from dbRows (already in memory — no extra DB call needed)
     const sel = document.getElementById('attendDateSelect');
     const prev = sel.value;
-
-    // Get dates from both tables
-    let aDates = [];
-    try{ const rows = await dbLoadAttendanceDates(); aDates = [...new Set(rows.map(r=>r.date))]; } catch(e){}
-    const vDates = [...new Set(dbRows.map(r=>r.date))];
-    const allDates = [...new Set([...aDates, ...vDates])].sort().reverse();
-
+    const allDates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
     sel.innerHTML = '<option value="">— Pick a date —</option>';
     allDates.forEach(d=>{
         const opt = document.createElement('option');
@@ -1605,6 +1662,13 @@ async function refreshAttendDateSelect(){
         sel.appendChild(opt);
     });
     if(prev && allDates.includes(prev)) sel.value = prev;
+    // Also add current report date if not in list
+    const curDate = document.getElementById('reportDate')?.value;
+    if(curDate && !allDates.includes(curDate)){
+        const opt = document.createElement('option');
+        opt.value = curDate; opt.textContent = getDayName(curDate) + ' — ' + formatDate(curDate);
+        sel.insertBefore(opt, sel.children[1]);
+    }
 }
 
 async function loadAttendance(){
@@ -1620,11 +1684,13 @@ async function loadAttendance(){
     document.getElementById('attendDeleteDateBtn').disabled = false;
     document.getElementById('attendContent').innerHTML = '<div class="no-attend">Loading…</div>';
     try{
+        // Only load manual overrides — auto attendance is derived from dbRows in memory
         attendRows = await dbLoadAttendance(dateStr);
         populateAttendEmpFilter();
         renderAttendance(dateStr);
     } catch(e){
-        document.getElementById('attendContent').innerHTML = '<div class="no-attend">❌ Failed to load: '+e.message+'</div>';
+        attendRows = [];
+        renderAttendance(dateStr); // still render from memory even if DB fails
     }
 }
 
@@ -1742,24 +1808,49 @@ function renderAttendance(dateStr){
         return;
     }
 
-    // Build merged list: start from all employees, overlay saved records
+    // Build merged list priority: manual override > lastReport (current date) > dbRows (past dates) > Unknown
+    const isCurrentDate = (lastReport.length > 0 && dateStr === (document.getElementById('reportDate').value || new Date().toISOString().split('T')[0]));
     const merged = allEmp.map(e=>{
-        const saved = attendRows.find(r=>r.name===e.name);
-        if(saved) return {...saved, fromDB:true};
-        // Check violation table for this date
+        // 1. Manual override always wins
+        const manual = attendRows.find(r=>r.name===e.name && r.source==='manual');
+        if(manual) return {...manual};
+
+        // 2. Use in-memory lastReport if this is the currently processed date (instant, no DB needed)
+        if(isCurrentDate){
+            const rep = lastReport.find(r=>r.name===e.name);
+            if(rep){
+                const cleanLogin  = rep.login  === '❌ No login'  ? '' : rep.login;
+                const cleanLogout = rep.logout === '❌ No logout' ? '' : rep.logout;
+                return { name:e.name, team:e.team, date:dateStr,
+                    status: rep.status==='On Leave'?'On Leave': rep.status==='Missing'?'Absent': rep.status,
+                    login:cleanLogin, logout:cleanLogout, notes:'', source:'slack', id:null };
+            }
+            return { name:e.name, team:e.team, date:dateStr, status:'Absent', login:'', logout:'', notes:'', source:'slack', id:null };
+        }
+
+        // 3. For past dates, check violation_history (already in memory as dbRows)
         const viol = dbRows.find(r=>r.date===dateStr && r.name===e.name);
         if(viol){
-            return {
-                name:e.name, team:e.team, date:dateStr,
-                status: viol.resolution==='On Leave' ? 'On Leave' :
-                        viol.status==='Missing' ? 'Absent' :
-                        viol.status==='Incomplete' ? 'Incomplete' : 'Present',
-                login:  viol.login  || '',
-                logout: viol.logout || '',
-                notes:  '', fromDB:false, fromViolation:true, id:null
-            };
+            const hrs = viol.login && viol.logout ? (()=>{
+                const a=timeToMinutes(viol.login), b=timeToMinutes(viol.logout);
+                if(a===null||b===null) return null;
+                return ((b<a?b+1440:b)-a)/60;
+            })() : null;
+            let status = viol.resolution==='On Leave' ? 'On Leave' :
+                         viol.status==='Missing'      ? 'Absent'   :
+                         viol.status==='Incomplete'   ? 'Incomplete' :
+                         hrs!==null && hrs<4.5        ? 'Half Day' :
+                         hrs!==null && hrs>=7.5       ? 'Full Day' : 'Incomplete';
+            return { name:e.name, team:e.team, date:dateStr,
+                status, login:viol.login||'', logout:viol.logout||'',
+                notes:'', source:'slack', id:null };
         }
-        return { name:e.name, team:e.team, date:dateStr, status:'Unknown', login:'', logout:'', notes:'', fromDB:false, id:null };
+
+        // 4. Also check slack-saved attendance_records for past dates
+        const slackSaved = attendRows.find(r=>r.name===e.name && r.source==='slack');
+        if(slackSaved) return {...slackSaved};
+
+        return { name:e.name, team:e.team, date:dateStr, status:'Unknown', login:'', logout:'', notes:'', source:'slack', id:null };
     });
 
     const fullDay    = merged.filter(r=>r.status==='Full Day').length;
@@ -1901,9 +1992,10 @@ async function saveManualEntry(){
         login:  (status==='Absent'||status==='On Leave') ? '' : login,
         logout: (status==='Absent'||status==='On Leave') ? '' : logout,
         notes:  notes,
-        source: 'manual'   // manually entered by user
+        source: 'manual'
     };
     if(!rowId) delete row.id;
+    // Only manual entries go to DB — slack data is derived from violation_history in memory
 
     closeAttendanceModal();
     try{
@@ -1930,21 +2022,20 @@ async function deleteAttendEntry(id){
 async function deleteAttendanceByDate(){
     const dateStr = attendCurrentDate;
     if(!dateStr){ showToast('No date selected.'); return; }
-    const count = attendRows.length;
+    const manualCount = attendRows.filter(r=>r.source==='manual').length;
     openConfirm(
-        'Delete Attendance',
-        'This will permanently delete all <strong>'+count+' attendance records</strong> for <strong>'+formatDateWithDay(dateStr)+'</strong>.',
+        'Delete Manual Overrides',
+        'This will delete <strong>'+manualCount+' manual override'+(manualCount!==1?'s':'')+
+        '</strong> for <strong>'+formatDateWithDay(dateStr)+'</strong>.<br>Auto-detected attendance from Slack will still be visible.',
         async ()=>{
-            setSyncStatus('loading','Deleting attendance for '+formatDate(dateStr)+'…');
+            setSyncStatus('loading','Deleting manual overrides…');
             try{
-                for(const r of attendRows){ await dbDeleteAttendance(r.id); }
-                attendRows = [];
-                await refreshAttendDateSelect();
+                const manuals = attendRows.filter(r=>r.source==='manual');
+                await Promise.all(manuals.map(r=>dbDeleteAttendance(r.id)));
+                attendRows = attendRows.filter(r=>r.source!=='manual');
                 renderAttendance(dateStr);
-                document.getElementById('attendSummary').innerHTML='';
-                document.getElementById('attendDeleteDateBtn').disabled=true;
-                showToast('🗑️ Attendance records for '+formatDate(dateStr)+' deleted.');
-                setSyncStatus('ok','✅ Deleted.');
+                showToast('🗑️ Manual overrides deleted for '+formatDate(dateStr)+'.');
+                setSyncStatus('ok','✅ Done.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
             }
@@ -1981,96 +2072,54 @@ function exportAttendanceCSV(){
 // ══════════════════════════════════════════════════════════════
 
 // Save ALL employees' attendance from Slack report to attendance_records table
-async function saveAttendanceFromReport(dateStr, report){
-    try{
-        // Step 1: Load existing records for this date — only to find manual entries to preserve
-        const existing = await dbLoadAttendance(dateStr);
-        const manualEntries = existing.filter(e => e.source === 'manual');
-        const manualNames   = new Set(manualEntries.map(e => e.name));
-
-        // Step 2: Delete all previous slack-auto-saved rows for this date in ONE request
-        await dbDeleteSlackAttendanceForDate(dateStr);
-
-        // Step 3: Build the full batch — skip employees with manual entries
-        const batch = [];
-        for(const r of report){
-            if(manualNames.has(r.name)) continue; // preserve manual edits
-
-            let status;
-            if(r.status === 'On Leave')        status = 'On Leave';
-            else if(r.status === 'Missing')    status = 'Absent';
-            else if(r.status === 'Half Day')   status = 'Half Day';
-            else if(r.status === 'Full Day')   status = 'Full Day';
-            else if(r.status === 'Incomplete') status = 'Incomplete';
-            else                               status = 'Full Day';
-
-            const cleanLogin  = (r.login  === '❌ No login'  || !r.login)  ? '' : r.login;
-            const cleanLogout = (r.logout === '❌ No logout' || !r.logout) ? '' : r.logout;
-
-            batch.push({
-                date:   dateStr,
-                name:   r.name,
-                team:   r.team,
-                status: status,
-                login:  cleanLogin,
-                logout: cleanLogout,
-                notes:  '',
-                source: 'slack'
-            });
-        }
-
-        // Step 4: Insert all rows in ONE single request — fast regardless of employee count
-        if(batch.length) await dbBulkInsertAttendance(batch);
-
-    } catch(e){
-        console.error('saveAttendanceFromReport error:', e);
-        // Don't block the UI — just log the error silently
-    }
-}
 
 async function processMessages(){
-    const input=document.getElementById('slackInput').value.trim();
-    if(!input){alert('Please paste some Slack messages first!');return;}
-    const msgs=parseMessages(input);
-    if(!msgs.length){alert('No valid messages detected.');return;}
-    lastReport=buildReport(msgs);
-    let dateStr=document.getElementById('reportDate').value;
-    if(!dateStr)dateStr=new Date().toISOString().split('T')[0];
-    const ann=lastReport.filter(r=>r.team==='annotation'),ass=lastReport.filter(r=>r.team==='assessment');
-    const viols=lastReport.filter(r=>r.status==='Missing'||r.status==='Incomplete'||r.status==='Half Day');
-    document.getElementById('tcAll').textContent=lastReport.length;
-    document.getElementById('tcViolations').textContent=viols.length;
-    document.getElementById('tcAnnotation').textContent=ann.length;
-    document.getElementById('tcAssessment').textContent=ass.length;
-    document.getElementById('viewTabs').style.display='flex';
-    document.getElementById('resultsArea').style.display='block';
+    const input = document.getElementById('slackInput').value.trim();
+    if(!input){ alert('Please paste some Slack messages first!'); return; }
+    const msgs = parseMessages(input);
+    if(!msgs.length){ alert('No valid messages detected.'); return; }
+
+    lastReport = buildReport(msgs);
+    let dateStr = document.getElementById('reportDate').value;
+    if(!dateStr) dateStr = new Date().toISOString().split('T')[0];
+
+    // ── Step 1: Show results instantly (synchronous, no DB needed) ──
+    const ann   = lastReport.filter(r=>r.team==='annotation');
+    const ass   = lastReport.filter(r=>r.team==='assessment');
+    const viols = lastReport.filter(r=>r.status==='Missing'||r.status==='Incomplete'||r.status==='Half Day');
+    document.getElementById('tcAll').textContent        = lastReport.length;
+    document.getElementById('tcViolations').textContent = viols.length;
+    document.getElementById('tcAnnotation').textContent = ann.length;
+    document.getElementById('tcAssessment').textContent = ass.length;
+    document.getElementById('viewTabs').style.display   = 'flex';
+    document.getElementById('resultsArea').style.display = 'block';
     renderView(activeViewTab);
-    // Save violations to violation_history table
-    await saveViolationsForDate(dateStr, lastReport);
 
-    // Save full attendance (all employees) to attendance_records table
-    setSyncStatus('loading', 'Saving attendance records…');
-    await saveAttendanceFromReport(dateStr, lastReport);
+    // ── Step 2: Show attendance instantly from in-memory data ──
+    attendCurrentDate = dateStr;
+    refreshAttendDateSelect();
+    document.getElementById('attendDateSelect').value = dateStr;
+    document.getElementById('attendAddBtn').disabled        = false;
+    document.getElementById('attendExportBtn').disabled     = false;
+    document.getElementById('attendDeleteDateBtn').disabled = false;
+    // Fetch only manual overrides for this date (small, fast query)
+    dbLoadAttendance(dateStr).then(rows=>{
+        attendRows = rows;
+        populateAttendEmpFilter();
+        renderAttendance(dateStr);
+    }).catch(()=>{ attendRows=[]; renderAttendance(dateStr); });
 
-    // Refresh attendance panel — reload from DB and auto-select this date
-    await refreshAttendDateSelect();
-    const attendSel = document.getElementById('attendDateSelect');
-    attendSel.value = dateStr;
-    await loadAttendance();
-
-    // Open attendance panel automatically
-    const ap = document.getElementById('attendPanelToggle');
-    const ab = document.getElementById('attendPanelBody');
+    // Open panels
+    const ap=document.getElementById('attendPanelToggle'),ab=document.getElementById('attendPanelBody');
     if(!ab.classList.contains('open')){ ap.classList.add('open'); ab.classList.add('open'); }
-
-    // Open violation history panel
     const hp=document.getElementById('histPanelToggle'),hb=document.getElementById('histPanelBody');
-    if(!hb.classList.contains('open')){hp.classList.add('open');hb.classList.add('open');}
+    if(!hb.classList.contains('open')){ hp.classList.add('open'); hb.classList.add('open'); }
 
-    const vc=lastReport.filter(r=>r.status==='Missing'||r.status==='Incomplete').length;
-    setSyncStatus('ok', '✅ Attendance & violations saved for ' + formatDate(dateStr));
-    showToast(vc?`✅ Saved. <strong>${vc} violation${vc!==1?'s':''}</strong> recorded for ${formatDate(dateStr)}.`:`✅ Saved — everyone compliant on ${formatDate(dateStr)}!`);
-    document.getElementById('lastUpdated').textContent=`✓ Last updated: ${new Date().toLocaleString()}`;
+    document.getElementById('lastUpdated').textContent = `✓ Last updated: ${new Date().toLocaleString()}`;
+    showToast(viols.length ? `✅ <strong>${viols.length} violation${viols.length!==1?'s':''}</strong> found. Saving to cloud…` : `✅ Everyone compliant on ${formatDate(dateStr)}! Saving…`);
+
+    // ── Step 3: Save to cloud in background — UI already showing results ──
+    await saveViolationsForDate(dateStr, lastReport);
 }
 
 function clearAll(){
@@ -2145,14 +2194,16 @@ async function initApp(){
         document.getElementById('clearOverlay').classList.remove('open');
         setSyncStatus('loading','Deleting all records…');
         try{
-            await dbDeleteAll();
-            // Also clear all attendance records
-            const allAttend = await sbFetch(ATTEND_TABLE + '?date=gte.0000-00-00');
-            for(const r of allAttend){ try{ await dbDeleteAttendance(r.id); } catch(e){} }
+            // Delete violation_history and attendance_records in parallel
+            await Promise.all([
+                dbDeleteAll(),
+                sbFetch(ATTEND_TABLE+'?date=gte.0000-00-00', {method:'DELETE'}).catch(()=>{})
+            ]);
             await loadFromCloud();
-            await refreshAttendDateSelect();
+            attendRows = [];
             document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
             document.getElementById('attendSummary').innerHTML='';
+            document.getElementById('attendDateSelect').innerHTML='<option value="">— Pick a date —</option>';
             showToast('🗑️ All history cleared.');
         }
         catch(e){ setSyncStatus('error','Delete failed: '+e.message); }
