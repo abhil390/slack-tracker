@@ -271,25 +271,49 @@
         #masterDeleteBtn{background:#dc3545;color:white;font-size:12px;padding:6px 14px;border:none;font-weight:700;letter-spacing:.3px;}
         #masterDeleteBtn:hover{background:#c0392b;}
 
-        .modal-master-delete{background:white;border-radius:16px;width:90%;max-width:480px;box-shadow:0 16px 60px rgba(0,0,0,.35);overflow:hidden;}
-        .modal-master-delete-header{background:linear-gradient(135deg,#c0392b,#922b21);color:white;padding:22px 24px;display:flex;align-items:center;gap:16px;}
-        .mdd-icon{font-size:32px;flex-shrink:0;}
-        .modal-master-delete-header h3{font-size:18px;font-weight:800;margin-bottom:4px;}
-        .modal-master-delete-header p{font-size:13px;opacity:.85;margin:0;}
-        .modal-master-delete-body{padding:24px;}
-        .mdd-date-box{background:#fff5f5;border:2px solid #f5c6cb;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;}
-        .mdd-date-main{font-size:24px;font-weight:800;color:#c0392b;letter-spacing:1px;}
-        .mdd-date-sub{font-size:13px;color:#888;margin-top:4px;}
-        .mdd-what{background:#f8f9fa;border-radius:8px;padding:12px 16px;margin-bottom:16px;}
-        .mdd-what-item{font-size:13px;color:#555;padding:4px 0;border-bottom:1px solid #eee;}
+        .modal-master-delete{background:white;border-radius:16px;width:95%;max-width:500px;box-shadow:0 16px 60px rgba(0,0,0,.35);overflow:hidden;max-height:90vh;display:flex;flex-direction:column;}
+        .modal-master-delete-header{background:linear-gradient(135deg,#c0392b,#922b21);color:white;padding:18px 22px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
+        .mdd-icon{font-size:28px;flex-shrink:0;}
+        .modal-master-delete-header h3{font-size:17px;font-weight:800;margin-bottom:3px;}
+        .modal-master-delete-header p{font-size:12px;opacity:.85;margin:0;}
+        .modal-master-delete-body{padding:20px;overflow-y:auto;}
+        /* Calendar */
+        .mdd-cal-wrap{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:12px;padding:14px;margin-bottom:16px;}
+        .mdd-cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+        .mdd-cal-title{font-size:15px;font-weight:700;color:#2c3e50;}
+        .mdd-cal-arr{background:none;border:1px solid #ddd;border-radius:6px;width:30px;height:30px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#555;line-height:1;}
+        .mdd-cal-arr:hover{background:#e0e0e0;}
+        .mdd-cal-grid-head{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;}
+        .mdd-cal-grid-head span{text-align:center;font-size:11px;font-weight:700;color:#aaa;padding:4px 0;}
+        .mdd-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+        .mdd-cal-day{height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:default;color:#ccc;position:relative;}
+        .mdd-cal-day.other-month{color:#ddd;}
+        .mdd-cal-day.has-data{background:#fff0f0;color:#c0392b;cursor:pointer;border:2px solid #f5c6cb;font-weight:800;}
+        .mdd-cal-day.has-data:hover{background:#ffd5d5;border-color:#c0392b;transform:scale(1.08);transition:all .15s;}
+        .mdd-cal-day.selected{background:#c0392b!important;color:white!important;border-color:#922b21!important;box-shadow:0 2px 8px rgba(192,57,43,.4);}
+        .mdd-cal-day.today{box-shadow:inset 0 0 0 2px #1a4d8c;}
+        .mdd-cal-day .mdd-dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#c0392b;}
+        .mdd-cal-day.selected .mdd-dot{background:white;}
+        .mdd-cal-legend{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:#888;justify-content:flex-end;}
+        .mdd-leg-dot{width:12px;height:12px;border-radius:3px;display:inline-block;}
+        .mdd-leg-dot.has-data{background:#fff0f0;border:2px solid #f5c6cb;}
+        .mdd-leg-dot.selected{background:#c0392b;}
+        /* Confirm section */
+        .mdd-confirm-wrap{animation:fadeIn .2s ease;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        .mdd-date-box{background:#fff5f5;border:2px solid #f5c6cb;border-radius:12px;padding:14px;text-align:center;margin-bottom:14px;}
+        .mdd-date-main{font-size:22px;font-weight:800;color:#c0392b;letter-spacing:1px;}
+        .mdd-date-sub{font-size:13px;color:#888;margin-top:3px;}
+        .mdd-record-count{font-size:12px;color:#c0392b;font-weight:700;margin-top:4px;}
+        .mdd-what{background:#f8f9fa;border-radius:8px;padding:10px 14px;margin-bottom:14px;}
+        .mdd-what-item{font-size:12px;color:#555;padding:3px 0;border-bottom:1px solid #eee;}
         .mdd-what-item:last-child{border-bottom:none;}
-        .mdd-instruction{font-size:13px;color:#333;margin-bottom:10px;font-weight:600;}
-        .modal-master-delete-body input{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:9px;font-size:16px;font-weight:800;letter-spacing:3px;text-align:center;box-sizing:border-box;text-transform:uppercase;}
+        .mdd-instruction{font-size:13px;color:#333;margin-bottom:8px;font-weight:600;}
+        .modal-master-delete-body input{width:100%;padding:11px 14px;border:2px solid #e0e0e0;border-radius:9px;font-size:16px;font-weight:800;letter-spacing:3px;text-align:center;box-sizing:border-box;text-transform:uppercase;}
         .modal-master-delete-body input:focus{outline:none;border-color:#dc3545;}
         .modal-master-delete-body input.match{border-color:#dc3545;background:#fff5f5;color:#c0392b;}
-        .modal-master-delete-body input.wrong{border-color:#e0e0e0;}
-        .mdd-hint{font-size:12px;text-align:center;min-height:18px;margin-top:6px;}
-        .modal-master-delete-footer{padding:14px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
+        .mdd-hint{font-size:12px;text-align:center;min-height:18px;margin-top:5px;}
+        .modal-master-delete-footer{padding:14px 22px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;}
 
         .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2c3e50;color:white;padding:12px 24px;border-radius:30px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999;}
         .toast.show{opacity:1;}
@@ -365,7 +389,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.6</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.8</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -653,28 +677,52 @@
         <div class="modal-master-delete-header">
             <div class="mdd-icon">🗑️</div>
             <div>
-                <h3>Delete All Data</h3>
-                <p id="mddSubtitle">This action cannot be undone.</p>
+                <h3>Delete Date Data</h3>
+                <p>Select a date below — only dates with data are shown.</p>
             </div>
+            <button onclick="closeMasterDelete()" style="margin-left:auto;background:rgba(255,255,255,.15);border:none;color:white;font-size:20px;cursor:pointer;line-height:1;padding:4px 8px;border-radius:6px;">&times;</button>
         </div>
         <div class="modal-master-delete-body">
-            <div class="mdd-date-box">
-                <div class="mdd-date-main" id="mddDateMain"></div>
-                <div class="mdd-date-sub"  id="mddDateSub"></div>
+
+            <!-- Calendar -->
+            <div class="mdd-cal-wrap">
+                <div class="mdd-cal-nav">
+                    <button class="mdd-cal-arr" onclick="mddCalMove(-1)">&#8249;</button>
+                    <span class="mdd-cal-title" id="mddCalTitle"></span>
+                    <button class="mdd-cal-arr" onclick="mddCalMove(1)">&#8250;</button>
+                </div>
+                <div class="mdd-cal-grid-head">
+                    <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                </div>
+                <div class="mdd-cal-grid" id="mddCalGrid"></div>
+                <div class="mdd-cal-legend">
+                    <span class="mdd-leg-dot has-data"></span> Has data &nbsp;
+                    <span class="mdd-leg-dot selected"></span> Selected
+                </div>
             </div>
-            <div class="mdd-what">
-                <div class="mdd-what-item">🚨 All violation records for this date</div>
-                <div class="mdd-what-item">📊 All attendance records for this date</div>
-                <div class="mdd-what-item">✅ All resolved/ignored entries for this date</div>
+
+            <!-- Selected date + confirm -->
+            <div class="mdd-confirm-wrap" id="mddConfirmWrap" style="display:none;">
+                <div class="mdd-date-box">
+                    <div class="mdd-date-main" id="mddDateMain"></div>
+                    <div class="mdd-date-sub"  id="mddDateSub"></div>
+                    <div class="mdd-record-count" id="mddRecordCount"></div>
+                </div>
+                <div class="mdd-what">
+                    <div class="mdd-what-item">🚨 All violation records for this date</div>
+                    <div class="mdd-what-item">📊 All attendance records for this date</div>
+                    <div class="mdd-what-item">✅ All resolved / ignored entries</div>
+                </div>
+                <p class="mdd-instruction">Type <strong>DELETE</strong> to confirm:</p>
+                <input type="text" id="mddInput" placeholder="Type DELETE here…" autocomplete="off" maxlength="10"
+                       oninput="onMddInput()" onkeydown="onMddKey(event)"/>
+                <div class="mdd-hint" id="mddHint"></div>
             </div>
-            <p class="mdd-instruction">Type <strong>DELETE</strong> below to confirm:</p>
-            <input type="text" id="mddInput" placeholder="Type DELETE here…" autocomplete="off" maxlength="10"
-                   oninput="onMddInput()" onkeydown="onMddKey(event)"/>
-            <div class="mdd-hint" id="mddHint"></div>
+
         </div>
         <div class="modal-master-delete-footer">
             <button class="btn btn-secondary" onclick="closeMasterDelete()">✖ Cancel</button>
-            <button class="btn btn-danger"    id="mddConfirmBtn" disabled onclick="onMddConfirm()">🗑️ Delete Everything</button>
+            <button class="btn btn-danger" id="mddConfirmBtn" disabled onclick="onMddConfirm()">🗑️ Delete Everything</button>
         </div>
     </div>
 </div>
@@ -2273,11 +2321,12 @@ function exportAttendanceCSV(){
 // Save ALL employees' attendance from Slack report to attendance_records table
 
 // ══════════════════════════════════════════════════════════════
-//  MASTER DELETE
+//  MASTER DELETE  (with calendar picker)
 // ══════════════════════════════════════════════════════════════
 let _masterDeleteDate = '';
+let _mddCalYear  = 0;
+let _mddCalMonth = 0; // 0-based
 
-// Call this whenever selected date changes to update the header button
 function updateMasterDeleteBtn(dateStr){
     _masterDeleteDate = dateStr || '';
     const wrap  = document.getElementById('masterDeleteWrap');
@@ -2291,29 +2340,121 @@ function updateMasterDeleteBtn(dateStr){
 }
 
 function openMasterDelete(){
-    if(!_masterDeleteDate){ showToast('Select a date first.'); return; }
-    const count = dbRows.filter(r=>r.date===_masterDeleteDate).length;
-    document.getElementById('mddDateMain').textContent = formatDate(_masterDeleteDate);
-    document.getElementById('mddDateSub').textContent  = getDayName(_masterDeleteDate);
-    document.getElementById('mddSubtitle').textContent = count + ' record'+(count!==1?'s':'')+' will be permanently deleted.';
+    // Get all dates that have data
+    const dataDates = new Set(dbRows.map(r=>r.date));
+    if(!dataDates.size){ showToast('No data to delete.'); return; }
+
+    // Open to current month (or month of selected date)
+    const base = _masterDeleteDate
+        ? new Date(_masterDeleteDate + 'T00:00:00')
+        : new Date();
+    _mddCalYear  = base.getFullYear();
+    _mddCalMonth = base.getMonth();
+
+    // Reset confirm section
+    document.getElementById('mddConfirmWrap').style.display = 'none';
     document.getElementById('mddInput').value     = '';
     document.getElementById('mddInput').className = '';
     document.getElementById('mddHint').textContent = '';
     document.getElementById('mddConfirmBtn').disabled = true;
+
     document.getElementById('masterDeleteOverlay').classList.add('open');
-    setTimeout(()=>document.getElementById('mddInput').focus(), 120);
+    renderMddCalendar();
+
+    // If a date is already selected, pre-select it
+    if(_masterDeleteDate && dataDates.has(_masterDeleteDate)){
+        mddSelectDate(_masterDeleteDate);
+    }
 }
 
 function closeMasterDelete(){
     document.getElementById('masterDeleteOverlay').classList.remove('open');
 }
 
+function mddCalMove(dir){
+    _mddCalMonth += dir;
+    if(_mddCalMonth > 11){ _mddCalMonth=0; _mddCalYear++; }
+    if(_mddCalMonth <  0){ _mddCalMonth=11; _mddCalYear--; }
+    renderMddCalendar();
+}
+
+function renderMddCalendar(){
+    const dataDates = new Set(dbRows.map(r=>r.date));
+    const today     = new Date().toISOString().split('T')[0];
+
+    const title = new Date(_mddCalYear, _mddCalMonth, 1)
+        .toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    document.getElementById('mddCalTitle').textContent = title;
+
+    const grid = document.getElementById('mddCalGrid');
+    grid.innerHTML = '';
+
+    // First day of month (0=Sun)
+    const firstDay = new Date(_mddCalYear, _mddCalMonth, 1).getDay();
+    // Days in month
+    const daysInMonth = new Date(_mddCalYear, _mddCalMonth+1, 0).getDate();
+
+    // Blank cells before first day
+    for(let i=0;i<firstDay;i++){
+        const blank = document.createElement('div');
+        blank.className = 'mdd-cal-day other-month';
+        grid.appendChild(blank);
+    }
+
+    for(let d=1; d<=daysInMonth; d++){
+        const mm   = String(_mddCalMonth+1).padStart(2,'0');
+        const dd   = String(d).padStart(2,'0');
+        const dStr = `${_mddCalYear}-${mm}-${dd}`;
+        const hasData = dataDates.has(dStr);
+        const isToday = dStr === today;
+        const isSel   = dStr === _masterDeleteDate;
+
+        const cell = document.createElement('div');
+        let cls = 'mdd-cal-day';
+        if(hasData) cls += ' has-data';
+        if(isToday) cls += ' today';
+        if(isSel)   cls += ' selected';
+        if(!hasData && !isToday) cls += ' no-data';
+        cell.className = cls;
+        cell.textContent = d;
+
+        if(hasData){
+            // Add small dot indicator
+            const dot = document.createElement('span');
+            dot.className = 'mdd-dot';
+            cell.appendChild(dot);
+            cell.title = formatDate(dStr) + ' — click to select';
+            cell.addEventListener('click', ()=> mddSelectDate(dStr));
+        }
+        grid.appendChild(cell);
+    }
+}
+
+function mddSelectDate(dateStr){
+    _masterDeleteDate = dateStr;
+    // Re-render calendar to show selection
+    renderMddCalendar();
+    // Show confirm section
+    const count = dbRows.filter(r=>r.date===dateStr).length;
+    document.getElementById('mddDateMain').textContent    = formatDate(dateStr);
+    document.getElementById('mddDateSub').textContent     = getDayName(dateStr);
+    document.getElementById('mddRecordCount').textContent = count + ' record'+(count!==1?'s':'')+' will be deleted';
+    document.getElementById('mddInput').value     = '';
+    document.getElementById('mddInput').className = '';
+    document.getElementById('mddHint').textContent = '';
+    document.getElementById('mddConfirmBtn').disabled = true;
+    document.getElementById('mddConfirmWrap').style.display = 'block';
+    setTimeout(()=>document.getElementById('mddInput').focus(), 80);
+    // Update header button label
+    updateMasterDeleteBtn(dateStr);
+}
+
 function onMddInput(){
-    const val   = document.getElementById('mddInput').value.toUpperCase().trim();
+    const val = document.getElementById('mddInput').value.toUpperCase().trim();
     const match = val === 'DELETE';
-    const btn   = document.getElementById('mddConfirmBtn');
-    const hint  = document.getElementById('mddHint');
-    const inp   = document.getElementById('mddInput');
+    const btn = document.getElementById('mddConfirmBtn');
+    const hint = document.getElementById('mddHint');
+    const inp  = document.getElementById('mddInput');
     btn.disabled = !match;
     if(!val){ inp.className=''; hint.textContent=''; return; }
     if(match){
@@ -2337,18 +2478,16 @@ async function onMddConfirm(){
 
     setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
     try{
-        // Delete from both tables
         await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE', prefer:'return=minimal'});
         await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE', prefer:'return=minimal'}).catch(()=>{});
 
-        // Update in-memory caches
         dbRows       = dbRows.filter(r=>r.date!==dateStr);
         attendRows   = [];
         lastReport   = [];
         attendCurrentDate = '';
         _masterDeleteDate = '';
 
-        // Remove date from BOTH dropdowns instantly
+        // Remove from both dropdowns instantly
         ['attendDateSelect','dateSelect'].forEach(id=>{
             const sel = document.getElementById(id);
             if(!sel) return;
@@ -2357,24 +2496,20 @@ async function onMddConfirm(){
             sel.value = '';
         });
 
-        // Reset attendance panel
-        document.getElementById('attendBadge').textContent   = 'Select a date';
-        document.getElementById('attendSummary').innerHTML   = '';
-        document.getElementById('attendContent').innerHTML   = '<div class="no-attend">Data deleted. Select another date to view.</div>';
-        document.getElementById('attendAddBtn').disabled      = true;
-        document.getElementById('attendExportBtn').disabled   = true;
+        document.getElementById('attendBadge').textContent  = 'Select a date';
+        document.getElementById('attendSummary').innerHTML  = '';
+        document.getElementById('attendContent').innerHTML  = '<div class="no-attend">Data deleted. Select another date to view.</div>';
+        document.getElementById('attendAddBtn').disabled     = true;
+        document.getElementById('attendExportBtn').disabled  = true;
 
-        // Reset date manager meta
-        const meta   = document.getElementById('dateMeta');
-        const reBtn  = document.getElementById('dateReenterBtn');
+        const meta  = document.getElementById('dateMeta');
+        const reBtn = document.getElementById('dateReenterBtn');
         if(meta)  meta.textContent = '';
-        if(reBtn) reBtn.disabled = true;
+        if(reBtn) reBtn.disabled   = true;
 
-        // Hide today's results if it was this date
         document.getElementById('viewTabs').style.display    = 'none';
         document.getElementById('resultsArea').style.display = 'none';
 
-        // Re-render violation history from updated cache
         renderHistory(getHistFilters());
         renderDateManager();
         updateMasterDeleteBtn('');
