@@ -196,6 +196,46 @@
         .modal-clear-body input.match{border-color:#27ae60;background:#f0fff4;}
         .modal-clear-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
 
+        /* attendance panel */
+        .attend-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+        .attend-toolbar select{padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;min-width:200px;}
+        .attend-toolbar select:focus{outline:none;border-color:#1a4d8c;}
+        .attend-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px;}
+        .attend-stat{background:#f8f9fa;border:1px solid #eee;border-radius:8px;padding:12px;text-align:center;}
+        .attend-stat .av{font-size:22px;font-weight:bold;}
+        .attend-stat .al{font-size:11px;text-transform:uppercase;color:#999;margin-top:4px;}
+        .attend-table-wrap{overflow:auto;border-radius:8px;border:1px solid #e0e0e0;}
+        .attend-table{width:100%;border-collapse:collapse;}
+        .attend-table th{background:#f0f2f5;font-size:12px;padding:10px 14px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #dee2e6;white-space:nowrap;}
+        .attend-table td{padding:9px 14px;border-bottom:1px solid #f0f2f5;font-size:13px;vertical-align:middle;}
+        .attend-table tr:last-child td{border-bottom:none;}
+        .attend-table tr:hover td{background:#fafafa;}
+        .attend-present td:first-child{border-left:4px solid #27ae60;}
+        .attend-incomplete td:first-child{border-left:4px solid #e67e22;}
+        .attend-absent td:first-child{border-left:4px solid #dc3545;}
+        .attend-leave td:first-child{border-left:4px solid #6c757d;}
+        .attend-badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;}
+        .ab-present{background:#d4edda;color:#155724;}
+        .ab-incomplete{background:#fff3cd;color:#856404;}
+        .ab-absent{background:#f8d7da;color:#721c24;}
+        .ab-leave{background:#e2e3e5;color:#383d41;}
+        .ab-manual{background:#e8d5ff;color:#5a32a3;font-size:10px;margin-left:4px;}
+        .no-attend{padding:30px;text-align:center;color:#aaa;font-size:14px;}
+
+        /* attendance manual entry modal */
+        .modal-attend{background:white;border-radius:14px;width:90%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden;}
+        .modal-attend-header{background:linear-gradient(135deg,#27ae60,#1e8449);color:white;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;}
+        .modal-attend-header h3{font-size:16px;font-weight:700;}
+        .modal-attend-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8;}
+        .modal-attend-close:hover{opacity:1;}
+        .modal-attend-body{padding:24px;}
+        .attend-field{margin-bottom:14px;}
+        .attend-field label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:5px;}
+        .attend-field input,.attend-field select{width:100%;padding:9px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;}
+        .attend-field input:focus,.attend-field select:focus{outline:none;border-color:#27ae60;}
+        .attend-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+        .modal-attend-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
+
         .debug-info{background:#f8f9fa;padding:10px;margin:10px 0;border-radius:5px;font-size:12px;color:#666;max-height:200px;overflow:auto;display:none;border:1px solid #dee2e6;font-family:monospace;}
         .footer{text-align:center;margin-top:20px;color:#666;font-size:13px;}
         .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2c3e50;color:white;padding:12px 24px;border-radius:30px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999;}
@@ -252,7 +292,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.7</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.9</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -373,6 +413,30 @@
         </div>
     </div>
 
+    <!-- Attendance Tracker Panel -->
+    <div class="panel" style="margin-top:24px;">
+        <div class="panel-header" id="attendPanelToggle">
+            <h2>📊 Daily Attendance Tracker
+                <span class="badge badge-blue" id="attendBadge">Select a date</span>
+            </h2>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body" id="attendPanelBody">
+            <div class="attend-toolbar">
+                <label style="font-size:13px;font-weight:600;color:#555;">Select Date:</label>
+                <select id="attendDateSelect" onchange="loadAttendance()">
+                    <option value="">— Pick a date —</option>
+                </select>
+                <button class="btn btn-success btn-sm" id="attendAddBtn" onclick="openAttendanceModal()" disabled>➕ Add / Edit Entry</button>
+                <button class="btn btn-secondary btn-sm" id="attendExportBtn" onclick="exportAttendanceCSV()" disabled>📥 Export CSV</button>
+            </div>
+            <div class="attend-summary" id="attendSummary"></div>
+            <div class="attend-table-wrap">
+                <div id="attendContent"><div class="no-attend">Select a date above to view attendance.</div></div>
+            </div>
+        </div>
+    </div>
+
     <div class="footer"><span id="lastUpdated"></span></div>
 </div><!-- end mainApp -->
 
@@ -392,6 +456,53 @@
         <div class="modal-clear-footer">
             <button class="btn btn-secondary" id="clearOverlayCancel">Cancel</button>
             <button class="btn btn-danger"    id="clearOverlayConfirm" disabled>🗑️ Delete Everything</button>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Manual Entry Modal -->
+<div class="modal-overlay" id="attendOverlay">
+    <div class="modal-attend">
+        <div class="modal-attend-header">
+            <h3>➕ Add / Edit Attendance Entry</h3>
+            <button class="modal-attend-close" id="attendCloseBtn">×</button>
+        </div>
+        <div class="modal-attend-body">
+            <div class="attend-field">
+                <label>Employee</label>
+                <select id="attendEmpSelect">
+                    <option value="">— Select employee —</option>
+                </select>
+            </div>
+            <div class="attend-field">
+                <label>Status</label>
+                <select id="attendStatus" onchange="onAttendStatusChange()">
+                    <option value="Present">✅ Present (has login + logout)</option>
+                    <option value="Incomplete">⚠️ Incomplete (missing login or logout)</option>
+                    <option value="Absent">❌ Absent</option>
+                    <option value="On Leave">📅 On Leave</option>
+                </select>
+            </div>
+            <div id="attendTimeFields">
+                <div class="attend-field-row">
+                    <div class="attend-field">
+                        <label>Login Time</label>
+                        <input type="text" id="attendLogin" placeholder="e.g. 9:00 AM"/>
+                    </div>
+                    <div class="attend-field">
+                        <label>Logout Time</label>
+                        <input type="text" id="attendLogout" placeholder="e.g. 6:00 PM"/>
+                    </div>
+                </div>
+            </div>
+            <div class="attend-field">
+                <label>Notes (optional)</label>
+                <input type="text" id="attendNotes" placeholder="Any notes or remarks…"/>
+            </div>
+        </div>
+        <div class="modal-attend-footer">
+            <button class="btn btn-secondary" id="attendCancelBtn" onclick="closeAttendanceModal()">Cancel</button>
+            <button class="btn btn-success"   id="attendSaveBtn">💾 Save Entry</button>
         </div>
     </div>
 </div>
@@ -452,8 +563,8 @@
 //  👤  USER ACCOUNTS  — change usernames and passwords here
 // ══════════════════════════════════════════════════════════════
 const USERS = [
-    { username: 'abhil',   password: 'abhil54#',  displayName: 'Abhil' },
-    { username: 'ramyashree',   password: 'ramya@456',  displayName: 'Ramyashree' }
+    { username: 'admin',   password: 'Admin@123',  displayName: 'Admin' },
+    { username: 'user2',   password: 'User2@456',  displayName: 'User 2' }
 ];
 // To add more users, copy a line above and change the details.
 // Example: { username: 'john', password: 'John@789', displayName: 'John' }
@@ -518,6 +629,8 @@ function showMainApp(session){
     document.getElementById('loginOverlay').classList.add('hidden');
     document.getElementById('mainApp').style.display = 'block';
     document.getElementById('loggedUserBadge').textContent = '👤 ' + session.displayName;
+    // Only init app if not already initialised (prevents double-init on page load)
+    if(!window._appInitialised) initApp();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -526,6 +639,7 @@ function showMainApp(session){
 const SUPABASE_URL = 'https://tfapnbvrquswjzogdhbh.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_VcT6pNqY6tO0jwBgBkOqQQ_ie4JPHdD';  // ← replace this with the long eyJ... key
 const TABLE = 'violation_history';
+const ATTEND_TABLE = 'attendance_records';
 
 // ══════════════════════════════════════════════════════════════
 //  SUPABASE API WRAPPER  (no extra libraries needed)
@@ -637,6 +751,31 @@ async function dbDeleteByDate(dateStr){
     });
 }
 
+// ── Attendance DB helpers ──
+async function dbLoadAttendance(dateStr){
+    return sbFetch(ATTEND_TABLE + '?date=eq.' + encodeURIComponent(dateStr) + '&order=name.asc&select=*');
+}
+async function dbSaveAttendance(row){
+    // PATCH if id exists, else INSERT
+    if(row.id){
+        return sbFetch(ATTEND_TABLE + '?id=eq.' + row.id, {
+            method:'PATCH', prefer:'return=minimal', body: JSON.stringify(row)
+        });
+    } else {
+        const {id, ...payload} = row;
+        return sbFetch(ATTEND_TABLE, {
+            method:'POST', prefer:'return=minimal', body: JSON.stringify(payload)
+        });
+    }
+}
+async function dbDeleteAttendance(id){
+    return sbFetch(ATTEND_TABLE + '?id=eq.' + id, { method:'DELETE' });
+}
+async function dbLoadAttendanceDates(){
+    // Get distinct dates from attendance table
+    return sbFetch(ATTEND_TABLE + '?select=date&order=date.desc');
+}
+
 // ══════════════════════════════════════════════════════════════
 //  DEFAULTS
 // ══════════════════════════════════════════════════════════════
@@ -687,6 +826,7 @@ async function loadFromCloud(){
         const active = dbRows.filter(r=>r.resolution==='violation').length;
         setSyncStatus('ok', '✅ Connected — ' + active + ' active violation' + (active!==1?'s':'') + ' | ' + dbRows.length + ' total records. Shared between both users.');
         renderHistory(getHistFilters());
+        refreshAttendDateSelect();
     } catch(e){
         setSyncStatus('error','❌ Could not connect to database. Check your API key. — '+e.message);
     }
@@ -1358,6 +1498,250 @@ Logout - Worked on: Production Portals
 Remarks: half hour extra.`;
 
 // ══════════════════════════════════════════════════════════════
+//  ATTENDANCE TRACKER
+// ══════════════════════════════════════════════════════════════
+let attendRows = [];        // current date's attendance rows from DB
+let attendCurrentDate = ''; // currently selected date
+let attendEditId = null;    // id of row being edited (null = new)
+
+// Populate attendance date dropdown — merge violation dates + attendance dates
+async function refreshAttendDateSelect(){
+    const sel = document.getElementById('attendDateSelect');
+    const prev = sel.value;
+
+    // Get dates from both tables
+    let aDates = [];
+    try{ const rows = await dbLoadAttendanceDates(); aDates = [...new Set(rows.map(r=>r.date))]; } catch(e){}
+    const vDates = [...new Set(dbRows.map(r=>r.date))];
+    const allDates = [...new Set([...aDates, ...vDates])].sort().reverse();
+
+    sel.innerHTML = '<option value="">— Pick a date —</option>';
+    allDates.forEach(d=>{
+        const opt = document.createElement('option');
+        opt.value = d; opt.textContent = formatDate(d);
+        sel.appendChild(opt);
+    });
+    if(prev && allDates.includes(prev)) sel.value = prev;
+}
+
+async function loadAttendance(){
+    const dateStr = document.getElementById('attendDateSelect').value;
+    if(!dateStr){ document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>'; return; }
+    attendCurrentDate = dateStr;
+    document.getElementById('attendAddBtn').disabled = false;
+    document.getElementById('attendExportBtn').disabled = false;
+    document.getElementById('attendContent').innerHTML = '<div class="no-attend">Loading…</div>';
+    try{
+        attendRows = await dbLoadAttendance(dateStr);
+        renderAttendance(dateStr);
+    } catch(e){
+        document.getElementById('attendContent').innerHTML = '<div class="no-attend">❌ Failed to load: '+e.message+'</div>';
+    }
+}
+
+function calcWorkingHours(login, logout){
+    if(!login || !logout) return '-';
+    const a = timeToMinutes(login), b = timeToMinutes(logout);
+    if(a===null || b===null) return '-';
+    const diff = (b < a ? b+1440 : b) - a;
+    return (diff/60).toFixed(2) + ' hrs';
+}
+
+function renderAttendance(dateStr){
+    window._attendRowMap = {}; // clear map on each render
+    const allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
+                    ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
+    const content = document.getElementById('attendContent');
+    const badge   = document.getElementById('attendBadge');
+
+    // Build merged list: start from all employees, overlay saved records
+    const merged = allEmp.map(e=>{
+        const saved = attendRows.find(r=>r.name===e.name);
+        if(saved) return {...saved, fromDB:true};
+        // Check violation table for this date
+        const viol = dbRows.find(r=>r.date===dateStr && r.name===e.name);
+        if(viol){
+            return {
+                name:e.name, team:e.team, date:dateStr,
+                status: viol.resolution==='On Leave' ? 'On Leave' :
+                        viol.status==='Missing' ? 'Absent' :
+                        viol.status==='Incomplete' ? 'Incomplete' : 'Present',
+                login:  viol.login  || '',
+                logout: viol.logout || '',
+                notes:  '', fromDB:false, fromViolation:true, id:null
+            };
+        }
+        return { name:e.name, team:e.team, date:dateStr, status:'Unknown', login:'', logout:'', notes:'', fromDB:false, id:null };
+    });
+
+    const present    = merged.filter(r=>r.status==='Present').length;
+    const incomplete = merged.filter(r=>r.status==='Incomplete').length;
+    const absent     = merged.filter(r=>r.status==='Absent').length;
+    const onLeave    = merged.filter(r=>r.status==='On Leave').length;
+    const unknown    = merged.filter(r=>r.status==='Unknown').length;
+
+    badge.textContent = formatDate(dateStr);
+    document.getElementById('attendSummary').innerHTML = `
+        <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total</div></div>
+        <div class="attend-stat"><div class="av" style="color:#27ae60">${present}</div><div class="al">✅ Present</div></div>
+        <div class="attend-stat"><div class="av" style="color:#e67e22">${incomplete}</div><div class="al">⚠️ Incomplete</div></div>
+        <div class="attend-stat"><div class="av" style="color:#dc3545">${absent}</div><div class="al">❌ Absent</div></div>
+        <div class="attend-stat"><div class="av" style="color:#6c757d">${onLeave}</div><div class="al">📅 On Leave</div></div>
+        <div class="attend-stat"><div class="av" style="color:#aaa">${unknown}</div><div class="al">❓ No Data</div></div>`;
+
+    if(!merged.length){ content.innerHTML='<div class="no-attend">No employees found.</div>'; return; }
+
+    const rows = merged.map(r=>{
+        const rowClass = r.status==='Present'?'attend-present':
+                         r.status==='Incomplete'?'attend-incomplete':
+                         r.status==='Absent'?'attend-absent':
+                         r.status==='On Leave'?'attend-leave':'';
+        const badgeCls = r.status==='Present'?'ab-present':
+                         r.status==='Incomplete'?'ab-incomplete':
+                         r.status==='Absent'?'ab-absent':'ab-leave';
+        const manualBadge = r.fromDB ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
+        const teamBadge   = `<span class="team-badge ${r.team}">${r.team==='annotation'?'Annotation':'Assessment'}</span>`;
+        const hours       = calcWorkingHours(r.login, r.logout);
+        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Absent'||r.status==='On Leave'||r.status==='Unknown')?'—':'❌ Missing';
+        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Absent'||r.status==='On Leave'||r.status==='Unknown')?'—':'❌ Missing';
+        // Store row data in a global map keyed by safe index — avoids ALL quote issues in onclick
+        const rowKey = 'ar_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        window._attendRowMap = window._attendRowMap || {};
+        window._attendRowMap[rowKey] = {id:r.id||null,name:r.name,status:r.status,login:r.login||'',logout:r.logout||'',notes:r.notes||''};
+
+        return `<tr class="${rowClass}">
+            <td><strong>${esc(r.name)}</strong>${manualBadge}</td>
+            <td>${teamBadge}</td>
+            <td><span class="attend-badge ${badgeCls}">${r.status}</span></td>
+            <td><span class="time-badge">${loginTxt}</span></td>
+            <td><span class="time-badge">${logoutTxt}</span></td>
+            <td><strong>${hours}</strong></td>
+            <td>${r.notes?'<span style="color:#888;font-size:12px;">'+esc(r.notes)+'</span>':''}</td>
+            <td>
+                <button class="btn btn-xs btn-secondary" onclick="openAttendanceModalFor(window._attendRowMap['${rowKey}'])">✏️ Edit</button>
+                ${r.id?`<button class="btn btn-xs btn-danger" style="margin-left:4px;" onclick="deleteAttendEntry('${r.id}')">🗑️</button>`:''}
+            </td>
+        </tr>`;
+    }).join('');
+
+    content.innerHTML = `<table class="attend-table">
+        <thead><tr><th>Employee</th><th>Team</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th><th>Notes</th><th>Action</th></tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function onAttendStatusChange(){
+    const s = document.getElementById('attendStatus').value;
+    document.getElementById('attendTimeFields').style.display = (s==='Absent'||s==='On Leave') ? 'none' : 'block';
+}
+
+function openAttendanceModal(){
+    attendEditId = null;
+    // Populate employee dropdown
+    const sel = document.getElementById('attendEmpSelect');
+    const allEmp = [...teams.annotation.map(n=>n), ...teams.assessment.map(n=>n)].sort();
+    sel.innerHTML = '<option value="">— Select employee —</option>' + allEmp.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    document.getElementById('attendStatus').value  = 'Present';
+    document.getElementById('attendLogin').value   = '';
+    document.getElementById('attendLogout').value  = '';
+    document.getElementById('attendNotes').value   = '';
+    onAttendStatusChange();
+    document.getElementById('attendOverlay').classList.add('open');
+    setTimeout(()=>document.getElementById('attendEmpSelect').focus(), 100);
+}
+
+function openAttendanceModalFor(data){
+    attendEditId = data.id || null;
+    const sel = document.getElementById('attendEmpSelect');
+    const allEmp = [...teams.annotation.map(n=>n), ...teams.assessment.map(n=>n)].sort();
+    sel.innerHTML = '<option value="">— Select employee —</option>' + allEmp.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    sel.value      = data.name;
+    document.getElementById('attendStatus').value  = data.status  || 'Present';
+    document.getElementById('attendLogin').value   = data.login   || '';
+    document.getElementById('attendLogout').value  = data.logout  || '';
+    document.getElementById('attendNotes').value   = data.notes   || '';
+    onAttendStatusChange();
+    document.getElementById('attendOverlay').classList.add('open');
+}
+
+function closeAttendanceModal(){
+    document.getElementById('attendOverlay').classList.remove('open');
+    attendEditId = null;
+}
+
+async function saveManualEntry(){
+    const name   = document.getElementById('attendEmpSelect').value.trim();
+    const status = document.getElementById('attendStatus').value;
+    const login  = document.getElementById('attendLogin').value.trim();
+    const logout = document.getElementById('attendLogout').value.trim();
+    const notes  = document.getElementById('attendNotes').value.trim();
+
+    if(!name){ showToast('⚠️ Please select an employee.'); return; }
+    if(!attendCurrentDate){ showToast('⚠️ No date selected.'); return; }
+
+    // Check if a DB record already exists for this employee on this date
+    const existing = attendRows.find(r=>r.name===name);
+    const rowId    = attendEditId || (existing ? existing.id : null);
+
+    const row = {
+        id:     rowId || undefined,
+        date:   attendCurrentDate,
+        name:   name,
+        team:   getTeam(name) || 'annotation',
+        status: status,
+        login:  (status==='Absent'||status==='On Leave') ? '' : login,
+        logout: (status==='Absent'||status==='On Leave') ? '' : logout,
+        notes:  notes
+    };
+    if(!rowId) delete row.id;
+
+    closeAttendanceModal();
+    try{
+        await dbSaveAttendance(row);
+        attendRows = await dbLoadAttendance(attendCurrentDate);
+        renderAttendance(attendCurrentDate);
+        showToast('✅ Attendance saved for '+esc(name));
+    } catch(e){
+        showToast('❌ Save failed: '+e.message);
+    }
+}
+
+async function deleteAttendEntry(id){
+    openConfirm('Delete Entry','Remove this attendance record?', async()=>{
+        try{
+            await dbDeleteAttendance(id);
+            attendRows = await dbLoadAttendance(attendCurrentDate);
+            renderAttendance(attendCurrentDate);
+            showToast('🗑️ Entry deleted.');
+        } catch(e){ showToast('❌ Delete failed: '+e.message); }
+    });
+}
+
+function exportAttendanceCSV(){
+    if(!attendCurrentDate){ showToast('Select a date first.'); return; }
+    const allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
+                    ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
+    const merged = allEmp.map(e=>{
+        const saved = attendRows.find(r=>r.name===e.name);
+        if(saved) return saved;
+        const viol = dbRows.find(r=>r.date===attendCurrentDate && r.name===e.name);
+        if(viol) return {name:e.name,team:e.team,status:viol.status==='Missing'?'Absent':viol.status,login:viol.login||'',logout:viol.logout||'',notes:''};
+        return {name:e.name,team:e.team,status:'Unknown',login:'',logout:'',notes:''};
+    });
+    let csv = 'Date,Employee,Team,Status,Login,Logout,Working Hours,Notes\n';
+    merged.forEach(r=>{
+        const hrs = calcWorkingHours(r.login,r.logout);
+        csv += `"${attendCurrentDate}","${r.name}","${teamLabel(r.team)}","${r.status}","${r.login||''}","${r.logout||''}","${hrs}","${(r.notes||'').replace(/"/g,'""')}"
+`;
+    });
+    const a = Object.assign(document.createElement('a'),{
+        href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+        download: `attendance-${attendCurrentDate}.csv`
+    });
+    a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ══════════════════════════════════════════════════════════════
 //  MAIN ACTIONS
 // ══════════════════════════════════════════════════════════════
 async function processMessages(){
@@ -1406,24 +1790,13 @@ function exportCSV(){
 // ══════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded',async function(){
+// ── App init — called once after login is confirmed ──
+async function initApp(){
+    if(window._appInitialised) return;
+    window._appInitialised = true;
 
-    // ── Check login session ──
-    const session = checkSession();
-    if(session){
-        showMainApp(session);
-    }
-    // Login button & Enter key
-    document.getElementById('loginBtn').addEventListener('click', doLogin);
-    document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
-    document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
-    document.getElementById('logoutBtn').addEventListener('click', doLogout);
-
-    // ── Only load app if logged in ──
-    if(!session) return;
-
-    loadTeams();renderEmpGrid();
-    document.getElementById('reportDate').value=new Date().toISOString().split('T')[0];
+    loadTeams(); renderEmpGrid();
+    document.getElementById('reportDate').value = new Date().toISOString().split('T')[0];
     await loadFromCloud();
 
     document.getElementById('empPanelToggle').addEventListener('click',()=>{
@@ -1465,19 +1838,13 @@ document.addEventListener('DOMContentLoaded',async function(){
     document.getElementById('clearOverlayConfirm').addEventListener('click',async()=>{
         document.getElementById('clearOverlay').classList.remove('open');
         setSyncStatus('loading','Deleting all records…');
-        try{
-            await dbDeleteAll();
-            await loadFromCloud();
-            showToast('🗑️ All history cleared.');
-        } catch(e){
-            setSyncStatus('error','Delete failed: '+e.message);
-        }
+        try{ await dbDeleteAll(); await loadFromCloud(); showToast('🗑️ All history cleared.'); }
+        catch(e){ setSyncStatus('error','Delete failed: '+e.message); }
     });
     document.getElementById('clearOverlay').addEventListener('click',e=>{
         if(e.target===document.getElementById('clearOverlay'))
             document.getElementById('clearOverlay').classList.remove('open');
     });
-
     document.getElementById('confirmOk').addEventListener('click',()=>{if(_ccb)_ccb();closeConfirm();});
     document.getElementById('confirmCancel').addEventListener('click',closeConfirm);
     document.getElementById('confirmOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('confirmOverlay'))closeConfirm();});
@@ -1490,6 +1857,15 @@ document.addEventListener('DOMContentLoaded',async function(){
     document.getElementById('editClose').addEventListener('click',closeEditModal);
     document.getElementById('editOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('editOverlay'))closeEditModal();});
 
+    // Attendance modal wiring
+    document.getElementById('attendCloseBtn').addEventListener('click', closeAttendanceModal);
+    document.getElementById('attendOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('attendOverlay')) closeAttendanceModal(); });
+    document.getElementById('attendSaveBtn').addEventListener('click', saveManualEntry);
+    document.getElementById('attendPanelToggle').addEventListener('click',()=>{
+        document.getElementById('attendPanelToggle').classList.toggle('open');
+        document.getElementById('attendPanelBody').classList.toggle('open');
+    });
+
     document.querySelectorAll('.view-tab').forEach(t=>t.addEventListener('click',()=>renderView(t.dataset.view)));
     document.getElementById('processBtn').addEventListener('click',processMessages);
     document.getElementById('clearBtn').addEventListener('click',clearAll);
@@ -1499,6 +1875,19 @@ document.addEventListener('DOMContentLoaded',async function(){
     });
     document.getElementById('sample1Btn').addEventListener('click',()=>{document.getElementById('slackInput').value=sampleData1;processMessages();});
     document.getElementById('sample2Btn').addEventListener('click',()=>{document.getElementById('slackInput').value=sampleData2;processMessages();});
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+    // Always wire login buttons first
+    document.getElementById('loginBtn').addEventListener('click', doLogin);
+    document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+    document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPass').focus(); });
+    document.getElementById('logoutBtn').addEventListener('click', doLogout);
+
+    // If already logged in, go straight to app
+    const session = checkSession();
+    if(session){ showMainApp(session); }
+    // else: login screen stays visible, initApp called when user logs in via showMainApp()
 });
 </script>
 </body>
