@@ -304,7 +304,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.4</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -793,6 +793,25 @@ async function dbDeleteAttendance(id){
 async function dbLoadAttendanceDates(){
     // Get distinct dates from attendance table
     return sbFetch(ATTEND_TABLE + '?select=date&order=date.desc');
+}
+
+// Bulk insert many attendance rows in ONE request — much faster than one-by-one
+async function dbBulkInsertAttendance(rows){
+    if(!rows.length) return;
+    // Strip any id fields — let Supabase generate them
+    const payload = rows.map(({id, ...r}) => r);
+    return sbFetch(ATTEND_TABLE, {
+        method: 'POST',
+        prefer: 'return=minimal',
+        body: JSON.stringify(payload)
+    });
+}
+
+// Delete all slack-auto-saved attendance for a date so we can re-insert fresh
+async function dbDeleteSlackAttendanceForDate(dateStr){
+    return sbFetch(ATTEND_TABLE + '?date=eq.' + encodeURIComponent(dateStr) + '&source=eq.slack', {
+        method: 'DELETE'
+    });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1964,15 +1983,19 @@ function exportAttendanceCSV(){
 // Save ALL employees' attendance from Slack report to attendance_records table
 async function saveAttendanceFromReport(dateStr, report){
     try{
-        // Load existing attendance records for this date so we don't overwrite manual edits
+        // Step 1: Load existing records for this date — only to find manual entries to preserve
         const existing = await dbLoadAttendance(dateStr);
+        const manualEntries = existing.filter(e => e.source === 'manual');
+        const manualNames   = new Set(manualEntries.map(e => e.name));
 
+        // Step 2: Delete all previous slack-auto-saved rows for this date in ONE request
+        await dbDeleteSlackAttendanceForDate(dateStr);
+
+        // Step 3: Build the full batch — skip employees with manual entries
+        const batch = [];
         for(const r of report){
-            // Skip if a manual entry already exists for this employee on this date
-            const manualEntry = existing.find(e => e.name === r.name);
-            if(manualEntry) continue; // preserve manual edits
+            if(manualNames.has(r.name)) continue; // preserve manual edits
 
-            // Map report status to attendance status using hours-based logic
             let status;
             if(r.status === 'On Leave')        status = 'On Leave';
             else if(r.status === 'Missing')    status = 'Absent';
@@ -1984,7 +2007,7 @@ async function saveAttendanceFromReport(dateStr, report){
             const cleanLogin  = (r.login  === '❌ No login'  || !r.login)  ? '' : r.login;
             const cleanLogout = (r.logout === '❌ No logout' || !r.logout) ? '' : r.logout;
 
-            const row = {
+            batch.push({
                 date:   dateStr,
                 name:   r.name,
                 team:   r.team,
@@ -1992,12 +2015,16 @@ async function saveAttendanceFromReport(dateStr, report){
                 login:  cleanLogin,
                 logout: cleanLogout,
                 notes:  '',
-                source: 'slack'   // auto-saved from Slack — not manually entered
-            };
-            await dbSaveAttendance(row);
+                source: 'slack'
+            });
         }
+
+        // Step 4: Insert all rows in ONE single request — fast regardless of employee count
+        if(batch.length) await dbBulkInsertAttendance(batch);
+
     } catch(e){
         console.error('saveAttendanceFromReport error:', e);
+        // Don't block the UI — just log the error silently
     }
 }
 
