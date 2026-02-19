@@ -335,7 +335,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.0</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.1</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -630,12 +630,12 @@
             <div class="date-display" id="dcDateDisplay"></div>
             <div class="date-day" id="dcDayDisplay"></div>
             <p>Type the date shown above in <strong>DD/MM/YYYY</strong> format to confirm:</p>
-            <input type="text" id="dcInput" placeholder="e.g. 19/02/2026" autocomplete="off" maxlength="10"/>
+            <input type="text" id="dcInput" placeholder="e.g. 19/02/2026" autocomplete="off" maxlength="10" oninput="onDcInput()" onkeydown="onDcKey(event)"/>
             <div class="modal-dateconfirm-hint" id="dcHint"></div>
         </div>
         <div class="modal-dateconfirm-footer">
-            <button class="btn btn-secondary" id="dcCancelBtn">✖ Cancel</button>
-            <button class="btn btn-primary"   id="dcConfirmBtn" disabled>✅ Yes, Process & Save</button>
+            <button class="btn btn-secondary" id="dcCancelBtn" onclick="closeDateConfirm()">✖ Cancel</button>
+            <button class="btn btn-primary"   id="dcConfirmBtn" disabled onclick="onDcConfirm()">✅ Yes, Process & Save</button>
         </div>
     </div>
 </div>
@@ -2275,49 +2275,48 @@ function exportAttendanceCSV(){
 // Save ALL employees' attendance from Slack report to attendance_records table
 
 // ── Date confirmation modal ──
-function openDateConfirm(dateStr, onConfirm){
-    // Format date as DD/MM/YYYY for user to type
-    const [y,m,d] = dateStr.split('-');
-    const displayDMY = d+'/'+m+'/'+y;
+let _dcPendingCallback = null;
+let _dcExpectedDate    = '';
 
-    document.getElementById('dcDateDisplay').textContent = displayDMY;
-    document.getElementById('dcDayDisplay').textContent  = getDayName(dateStr) + ', ' + formatDate(dateStr);
-    document.getElementById('dcInput').value   = '';
-    document.getElementById('dcInput').className = '';
-    document.getElementById('dcHint').textContent = '';
-    document.getElementById('dcConfirmBtn').disabled = true;
+function openDateConfirm(dateStr, onConfirm){
+    const [y,m,d] = dateStr.split('-');
+    _dcExpectedDate    = d+'/'+m+'/'+y;
+    _dcPendingCallback = onConfirm;
+
+    document.getElementById('dcDateDisplay').textContent = _dcExpectedDate;
+    document.getElementById('dcDayDisplay').textContent  = getDayName(dateStr)+', '+formatDate(dateStr);
+    document.getElementById('dcInput').value             = '';
+    document.getElementById('dcInput').className         = '';
+    document.getElementById('dcHint').textContent        = '';
+    document.getElementById('dcConfirmBtn').disabled     = true;
     document.getElementById('dateConfirmOverlay').classList.add('open');
     setTimeout(()=>document.getElementById('dcInput').focus(), 120);
+}
 
-    // Wire confirm button for this call
-    const confirmBtn = document.getElementById('dcConfirmBtn');
-    const newBtn = confirmBtn.cloneNode(true); // remove old listeners
-    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-    newBtn.disabled = true;
-    newBtn.addEventListener('click', ()=>{
-        document.getElementById('dateConfirmOverlay').classList.remove('open');
-        onConfirm();
-    });
+function onDcInput(){
+    const val   = document.getElementById('dcInput').value.trim();
+    const match = val === _dcExpectedDate;
+    const hint  = document.getElementById('dcHint');
+    document.getElementById('dcConfirmBtn').disabled = !match;
+    if(!val){ document.getElementById('dcInput').className=''; hint.textContent=''; return; }
+    if(match){
+        document.getElementById('dcInput').className='match';
+        hint.innerHTML='<span style="color:#27ae60;font-weight:600;">✅ Date confirmed!</span>';
+    } else {
+        document.getElementById('dcInput').className='wrong';
+        hint.innerHTML='<span style="color:#dc3545;">Expected: <strong>'+_dcExpectedDate+'</strong></span>';
+    }
+}
 
-    // Input validation
-    const input = document.getElementById('dcInput');
-    const newInput = input.cloneNode(true);
-    input.parentNode.replaceChild(newInput, input);
-    newInput.addEventListener('input', function(){
-        const val   = this.value.trim();
-        const match = val === displayDMY;
-        const hint  = document.getElementById('dcHint');
-        newBtn.disabled = !match;
-        if(!val){ this.className=''; hint.textContent=''; return; }
-        if(match){
-            this.className='match';
-            hint.innerHTML='<span style="color:#27ae60;font-weight:600;">✅ Date confirmed!</span>';
-        } else {
-            this.className='wrong';
-            hint.innerHTML='<span style="color:#dc3545;">Expected: <strong>'+displayDMY+'</strong></span>';
-        }
-    });
-    newInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !newBtn.disabled) newBtn.click(); });
+function onDcKey(e){
+    if(e.key==='Enter' && !document.getElementById('dcConfirmBtn').disabled) onDcConfirm();
+    if(e.key==='Escape') closeDateConfirm();
+}
+
+function onDcConfirm(){
+    closeDateConfirm();
+    if(_dcPendingCallback) _dcPendingCallback();
+    _dcPendingCallback = null;
 }
 
 function closeDateConfirm(){
@@ -2329,6 +2328,9 @@ async function processMessages(){
     if(!input){ alert('Please paste some Slack messages first!'); return; }
     const msgs = parseMessages(input);
     if(!msgs.length){ alert('No valid messages detected.'); return; }
+
+    // Build report NOW (before modal) so it's ready when confirmed
+    lastReport = buildReport(msgs);
 
     let dateStr = document.getElementById('reportDate').value;
     if(!dateStr) dateStr = new Date().toISOString().split('T')[0];
@@ -2484,7 +2486,6 @@ async function initApp(){
     document.getElementById('attendLogin') .addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendLogout').addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendCloseBtn').addEventListener('click', closeAttendanceModal);
-    document.getElementById('dcCancelBtn').addEventListener('click', closeDateConfirm);
     document.getElementById('dateConfirmOverlay').addEventListener('click', e=>{
         if(e.target===document.getElementById('dateConfirmOverlay')) closeDateConfirm();
     });
