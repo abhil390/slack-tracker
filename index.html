@@ -335,7 +335,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.4</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -2212,7 +2212,7 @@ async function deleteAttendanceByDate(){
         async ()=>{
             setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
             try{
-                // Delete from violation_history (no .catch — we want to know if it fails)
+                // Delete from violation_history
                 await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
                     method:'DELETE', prefer:'return=minimal'
                 });
@@ -2221,26 +2221,49 @@ async function deleteAttendanceByDate(){
                     method:'DELETE', prefer:'return=minimal'
                 }).catch(()=>{});
 
-                // Update local cache
-                dbRows = dbRows.filter(r=>r.date!==dateStr);
-                attendRows = [];
+                // ── Instantly update everything in memory ──
+                dbRows       = dbRows.filter(r=>r.date!==dateStr);
+                attendRows   = [];
+                lastReport   = []; // clear so isCurrentDate check doesn't show stale data
                 attendCurrentDate = '';
 
-                // Reset attendance UI
-                document.getElementById('attendDateSelect').value = '';
-                document.getElementById('attendContent').innerHTML = '<div class="no-attend">Select a date above to view attendance.</div>';
-                document.getElementById('attendSummary').innerHTML = '';
-                document.getElementById('attendAddBtn').disabled = true;
-                document.getElementById('attendExportBtn').disabled = true;
+                // Remove deleted date from dropdown immediately (no full re-render)
+                const sel = document.getElementById('attendDateSelect');
+                const opt = sel.querySelector(`option[value="${dateStr}"]`);
+                if(opt) opt.remove();
+                sel.value = '';
+
+                // Also remove from violation history date manager
+                const dmSel = document.getElementById('dateSelect');
+                if(dmSel){
+                    const dmOpt = dmSel.querySelector(`option[value="${dateStr}"]`);
+                    if(dmOpt) dmOpt.remove();
+                    dmSel.value = '';
+                    document.getElementById('dateMeta').textContent = '';
+                    const reBtn = document.getElementById('dateReenterBtn');
+                    const delBtn = document.getElementById('dateDeleteBtn');
+                    if(reBtn)  reBtn.disabled  = true;
+                    if(delBtn) delBtn.disabled = true;
+                }
+
+                // Reset attendance panel to empty state instantly
+                document.getElementById('attendBadge').textContent   = 'Select a date';
+                document.getElementById('attendSummary').innerHTML   = '';
+                document.getElementById('attendContent').innerHTML   = '<div class="no-attend">Data for '+formatDate(dateStr)+' has been deleted. Select another date.</div>';
+                document.getElementById('attendAddBtn').disabled      = true;
+                document.getElementById('attendExportBtn').disabled   = true;
                 document.getElementById('attendDeleteDateBtn').disabled = true;
 
-                // Re-render everything from updated cache
+                // Hide today's results panel if it was showing this date
+                document.getElementById('viewTabs').style.display    = 'none';
+                document.getElementById('resultsArea').style.display = 'none';
+
+                // Re-render violation history from updated cache
                 renderHistory(getHistFilters());
-                renderDateManager();
-                refreshAttendDateSelect();
+                updateHistBadge();
 
                 showToast('🗑️ All data for '+formatDate(dateStr)+' deleted.');
-                setSyncStatus('ok','✅ Deleted. If data reappears, click 🔄 Refresh.');
+                setSyncStatus('ok','✅ Deleted successfully.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
                 showToast('❌ Delete failed: '+e.message);
