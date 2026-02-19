@@ -304,7 +304,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.6</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.7</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1285,6 +1285,14 @@ function toggleHistBlock(id){const el=document.getElementById(id);if(el)el.class
 function formatDate(d){
     if(!d)return'-';
     return new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+function getDayName(d){
+    if(!d)return'';
+    return new Date(d+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long'});
+}
+function formatDateWithDay(d){
+    if(!d)return'';
+    return getDayName(d)+', '+formatDate(d);
 }
 
 function getHistFilters(){
