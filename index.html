@@ -101,6 +101,7 @@
         .status-badge{padding:4px 8px;border-radius:20px;font-size:12px;font-weight:600;display:inline-block;}
         .status-complete{background:#d4edda;color:#155724;}
         .status-incomplete{background:#fff3cd;color:#856404;}
+        .status-halfday{background:#fde8c8;color:#8a4a00;}
         .status-leave{background:#e2e3e5;color:#383d41;}
         .status-missing{background:#f8d7da;color:#721c24;}
         .time-badge{background:#e9ecef;padding:4px 8px;border-radius:15px;font-size:12px;}
@@ -211,11 +212,15 @@
         .attend-table tr:last-child td{border-bottom:none;}
         .attend-table tr:hover td{background:#fafafa;}
         .attend-present td:first-child{border-left:4px solid #27ae60;}
+        .attend-fullday td:first-child{border-left:4px solid #27ae60;}
+        .attend-halfday td:first-child{border-left:4px solid #e67e22;}
         .attend-incomplete td:first-child{border-left:4px solid #e67e22;}
         .attend-absent td:first-child{border-left:4px solid #dc3545;}
         .attend-leave td:first-child{border-left:4px solid #6c757d;}
         .attend-badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;}
         .ab-present{background:#d4edda;color:#155724;}
+        .ab-fullday{background:#d4edda;color:#155724;}
+        .ab-halfday{background:#fde8c8;color:#8a4a00;}
         .ab-incomplete{background:#fff3cd;color:#856404;}
         .ab-absent{background:#f8d7da;color:#721c24;}
         .ab-leave{background:#e2e3e5;color:#383d41;}
@@ -292,7 +297,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.1</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.2</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -477,7 +482,8 @@
             <div class="attend-field">
                 <label>Status</label>
                 <select id="attendStatus" onchange="onAttendStatusChange()">
-                    <option value="Present">✅ Present (has login + logout)</option>
+                    <option value="Full Day">✅ Full Day (7.5+ hrs)</option>
+                    <option value="Half Day">🌓 Half Day (less than 4.5 hrs)</option>
                     <option value="Incomplete">⚠️ Incomplete (missing login or logout)</option>
                     <option value="Absent">❌ Absent</option>
                     <option value="On Leave">📅 On Leave</option>
@@ -1344,6 +1350,26 @@ function parseMessages(rawText){
 // ══════════════════════════════════════════════════════════════
 //  REPORT BUILDER
 // ══════════════════════════════════════════════════════════════
+// ── Determine attendance status based on working hours ──
+// < 4.5 hrs  → Half Day
+// 4.5–7.5 hrs → Incomplete (present but short)
+// > 7.5 hrs  → Full Day
+// No login or logout → Missing / Incomplete (unchanged)
+function getAttendanceStatus(login, logout, hasLogin, hasLogout){
+    if(!hasLogin && !hasLogout) return { status:'Missing',    statusClass:'status-missing',    icon:'❓', attendStatus:'Absent'    };
+    if(!hasLogin || !hasLogout) return { status:'Incomplete', statusClass:'status-incomplete', icon:'⚠️', attendStatus:'Incomplete' };
+
+    const a = timeToMinutes(login), b = timeToMinutes(logout);
+    if(a === null || b === null)   return { status:'Incomplete', statusClass:'status-incomplete', icon:'⚠️', attendStatus:'Incomplete' };
+
+    const diffMins = (b < a ? b + 1440 : b) - a;
+    const hrs      = diffMins / 60;
+
+    if(hrs < 4.5)  return { status:'Half Day',  statusClass:'status-halfday',  icon:'🌓', attendStatus:'Half Day'  };
+    if(hrs >= 7.5) return { status:'Full Day',  statusClass:'status-complete', icon:'✅', attendStatus:'Full Day'  };
+                   return { status:'Incomplete', statusClass:'status-incomplete', icon:'⚠️', attendStatus:'Incomplete' };
+}
+
 function buildReport(msgs){
     const state={};
     allEmployees().forEach(n=>{state[n]={logins:[],logouts:[],onLeave:false};});
@@ -1360,30 +1386,31 @@ function buildReport(msgs){
         const logout=s.logouts.sort((a,b)=>(timeToMinutes(b)||0)-(timeToMinutes(a)||0))[0]||null;
         let hours='-';
         if(login&&logout){const d=timeToMinutes(logout)-timeToMinutes(login);hours=((d<0?d+1440:d)/60).toFixed(2)+' hrs';}
-        const status=login&&logout?'Complete':(login||logout)?'Incomplete':'Missing';
-        const statusClass={Complete:'status-complete',Incomplete:'status-incomplete',Missing:'status-missing'}[status];
-        const icon={Complete:'✅',Incomplete:'⚠️',Missing:'❓'}[status];
+        const {status,statusClass,icon} = getAttendanceStatus(login, logout, !!login, !!logout);
         return{name,team,login:login||'❌ No login',logout:logout||'❌ No logout',workingHours:hours,status,statusClass,icon};
     });
 }
 
 function calcStats(rows){
-    const total=rows.length,comp=rows.filter(r=>r.status==='Complete').length,
-          inc=rows.filter(r=>r.status==='Incomplete').length,
-          leave=rows.filter(r=>r.status==='On Leave').length,
-          miss=rows.filter(r=>r.status==='Missing').length,
-          rate=total?((comp/total)*100).toFixed(1):'0';
-    return{total,comp,inc,leave,miss,rate};
+    const total    = rows.length,
+          fullDay  = rows.filter(r=>r.status==='Full Day').length,
+          halfDay  = rows.filter(r=>r.status==='Half Day').length,
+          inc      = rows.filter(r=>r.status==='Incomplete').length,
+          leave    = rows.filter(r=>r.status==='On Leave').length,
+          miss     = rows.filter(r=>r.status==='Missing').length,
+          rate     = total?((fullDay/total)*100).toFixed(1):'0';
+    return{total,fullDay,halfDay,inc,leave,miss,rate};
 }
 function renderStats(rows){
     const s=calcStats(rows);
     document.getElementById('statsContainer').innerHTML=`
         <div class="stat-card"><h3>Total</h3><div class="value">${s.total}</div></div>
-        <div class="stat-card"><h3>✅ Complete</h3><div class="value complete">${s.comp}</div></div>
+        <div class="stat-card"><h3>✅ Full Day</h3><div class="value complete">${s.fullDay}</div></div>
+        <div class="stat-card"><h3>🌓 Half Day</h3><div class="value incomplete">${s.halfDay}</div></div>
         <div class="stat-card"><h3>⚠️ Incomplete</h3><div class="value incomplete">${s.inc}</div></div>
         <div class="stat-card"><h3>📅 On Leave</h3><div class="value leave">${s.leave}</div></div>
         <div class="stat-card"><h3>❌ Missing</h3><div class="value missing">${s.miss}</div></div>
-        <div class="stat-card"><h3>Completion</h3><div class="value">${s.rate}%</div></div>`;
+        <div class="stat-card"><h3>Full Day %</h3><div class="value">${s.rate}%</div></div>`;
 }
 function empRow(e){
     return`<tr>
@@ -1578,7 +1605,9 @@ function renderAttendance(dateStr){
         return { name:e.name, team:e.team, date:dateStr, status:'Unknown', login:'', logout:'', notes:'', fromDB:false, id:null };
     });
 
+    const fullDay    = merged.filter(r=>r.status==='Full Day').length;
     const present    = merged.filter(r=>r.status==='Present').length;
+    const halfDay    = merged.filter(r=>r.status==='Half Day').length;
     const incomplete = merged.filter(r=>r.status==='Incomplete').length;
     const absent     = merged.filter(r=>r.status==='Absent').length;
     const onLeave    = merged.filter(r=>r.status==='On Leave').length;
@@ -1587,7 +1616,8 @@ function renderAttendance(dateStr){
     badge.textContent = formatDate(dateStr);
     document.getElementById('attendSummary').innerHTML = `
         <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total</div></div>
-        <div class="attend-stat"><div class="av" style="color:#27ae60">${present}</div><div class="al">✅ Present</div></div>
+        <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay + present}</div><div class="al">✅ Full Day</div></div>
+        <div class="attend-stat"><div class="av" style="color:#e67e22">${halfDay}</div><div class="al">🌓 Half Day</div></div>
         <div class="attend-stat"><div class="av" style="color:#e67e22">${incomplete}</div><div class="al">⚠️ Incomplete</div></div>
         <div class="attend-stat"><div class="av" style="color:#dc3545">${absent}</div><div class="al">❌ Absent</div></div>
         <div class="attend-stat"><div class="av" style="color:#6c757d">${onLeave}</div><div class="al">📅 On Leave</div></div>
@@ -1596,13 +1626,17 @@ function renderAttendance(dateStr){
     if(!merged.length){ content.innerHTML='<div class="no-attend">No employees found.</div>'; return; }
 
     const rows = merged.map(r=>{
-        const rowClass = r.status==='Present'?'attend-present':
-                         r.status==='Incomplete'?'attend-incomplete':
-                         r.status==='Absent'?'attend-absent':
-                         r.status==='On Leave'?'attend-leave':'';
-        const badgeCls = r.status==='Present'?'ab-present':
-                         r.status==='Incomplete'?'ab-incomplete':
-                         r.status==='Absent'?'ab-absent':'ab-leave';
+        const rowClass = r.status==='Full Day'   ?'attend-fullday':
+                         r.status==='Present'    ?'attend-present':
+                         r.status==='Half Day'   ?'attend-halfday':
+                         r.status==='Incomplete' ?'attend-incomplete':
+                         r.status==='Absent'     ?'attend-absent':
+                         r.status==='On Leave'   ?'attend-leave':'';
+        const badgeCls = r.status==='Full Day'   ?'ab-fullday':
+                         r.status==='Present'    ?'ab-present':
+                         r.status==='Half Day'   ?'ab-halfday':
+                         r.status==='Incomplete' ?'ab-incomplete':
+                         r.status==='Absent'     ?'ab-absent':'ab-leave';
         const manualBadge = r.source === 'manual' ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
         const teamBadge   = `<span class="team-badge ${r.team}">${r.team==='annotation'?'Annotation':'Assessment'}</span>`;
         const hours       = calcWorkingHours(r.login, r.logout);
@@ -1637,6 +1671,20 @@ function renderAttendance(dateStr){
 function onAttendStatusChange(){
     const s = document.getElementById('attendStatus').value;
     document.getElementById('attendTimeFields').style.display = (s==='Absent'||s==='On Leave') ? 'none' : 'block';
+}
+
+// Recalculate status from login/logout when times are provided manually
+function recalcStatusFromTimes(){
+    const login  = document.getElementById('attendLogin').value.trim();
+    const logout = document.getElementById('attendLogout').value.trim();
+    if(!login || !logout) return;
+    const a = timeToMinutes(login), b = timeToMinutes(logout);
+    if(a === null || b === null) return;
+    const hrs = ((b < a ? b+1440 : b) - a) / 60;
+    const sel = document.getElementById('attendStatus');
+    if(hrs < 4.5)       sel.value = 'Half Day';
+    else if(hrs >= 7.5) sel.value = 'Full Day';
+    else                sel.value = 'Incomplete';
 }
 
 function openAttendanceModal(){
@@ -1761,12 +1809,14 @@ async function saveAttendanceFromReport(dateStr, report){
             const manualEntry = existing.find(e => e.name === r.name);
             if(manualEntry) continue; // preserve manual edits
 
-            // Map report status to attendance status
-            let status = 'Present';
-            if(r.status === 'On Leave')   status = 'On Leave';
+            // Map report status to attendance status using hours-based logic
+            let status;
+            if(r.status === 'On Leave')        status = 'On Leave';
             else if(r.status === 'Missing')    status = 'Absent';
+            else if(r.status === 'Half Day')   status = 'Half Day';
+            else if(r.status === 'Full Day')   status = 'Full Day';
             else if(r.status === 'Incomplete') status = 'Incomplete';
-            else if(r.status === 'Complete')   status = 'Present';
+            else                               status = 'Full Day';
 
             const cleanLogin  = (r.login  === '❌ No login'  || !r.login)  ? '' : r.login;
             const cleanLogout = (r.logout === '❌ No logout' || !r.logout) ? '' : r.logout;
@@ -1932,6 +1982,8 @@ async function initApp(){
     document.getElementById('editOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('editOverlay'))closeEditModal();});
 
     // Attendance modal wiring
+    document.getElementById('attendLogin') .addEventListener('blur', recalcStatusFromTimes);
+    document.getElementById('attendLogout').addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendCloseBtn').addEventListener('click', closeAttendanceModal);
     document.getElementById('attendOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('attendOverlay')) closeAttendanceModal(); });
     document.getElementById('attendSaveBtn').addEventListener('click', saveManualEntry);
