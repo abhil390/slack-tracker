@@ -77,6 +77,7 @@
         .view-tab{flex:1;padding:14px;text-align:center;font-size:14px;font-weight:600;cursor:pointer;background:#e9ecef;color:#555;border:none;transition:background .2s,color .2s;}
         .view-tab .tab-count{font-size:11px;font-weight:700;margin-left:6px;padding:2px 7px;border-radius:20px;background:rgba(0,0,0,.1);}
         .view-tab.active-all{background:#2c3e50;color:white;}
+        .view-tab.active-violations{background:#dc3545;color:white;}
         .view-tab.active-annotation{background:#1a4d8c;color:white;}
         .view-tab.active-assessment{background:#c0631a;color:white;}
 
@@ -226,6 +227,12 @@
         .ab-leave{background:#e2e3e5;color:#383d41;}
         .ab-manual{background:#e8d5ff;color:#5a32a3;font-size:10px;margin-left:4px;}
         .no-attend{padding:30px;text-align:center;color:#aaa;font-size:14px;}
+        .attend-emp-history{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:16px;}
+        .attend-emp-history h4{font-size:13px;font-weight:700;color:#333;margin-bottom:12px;}
+        .attend-hist-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;flex-wrap:wrap;}
+        .attend-hist-row:last-child{border-bottom:none;}
+        .attend-day-label{font-weight:700;color:#1a4d8c;min-width:90px;}
+        .attend-day-name{color:#888;font-size:11px;min-width:70px;}
 
         /* attendance manual entry modal */
         .modal-attend{background:white;border-radius:14px;width:90%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden;}
@@ -297,7 +304,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.2</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.3</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -356,6 +363,7 @@
     <!-- Today's Results -->
     <div class="view-tabs" id="viewTabs" style="display:none;">
         <button class="view-tab active-all" data-view="all">📊 All <span class="tab-count" id="tcAll">0</span></button>
+        <button class="view-tab" data-view="violations">🚨 Violations <span class="tab-count" id="tcViolations">0</span></button>
         <button class="view-tab" data-view="annotation">🔵 Annotation <span class="tab-count" id="tcAnnotation">0</span></button>
         <button class="view-tab" data-view="assessment">🟠 Assessment <span class="tab-count" id="tcAssessment">0</span></button>
     </div>
@@ -432,8 +440,13 @@
                 <select id="attendDateSelect" onchange="loadAttendance()">
                     <option value="">— Pick a date —</option>
                 </select>
+                <label style="font-size:13px;font-weight:600;color:#555;">Filter Employee:</label>
+                <select id="attendEmpFilter" onchange="renderAttendanceFiltered()">
+                    <option value="">All Employees</option>
+                </select>
                 <button class="btn btn-success btn-sm" id="attendAddBtn" onclick="openAttendanceModal()" disabled>➕ Add / Edit Entry</button>
                 <button class="btn btn-secondary btn-sm" id="attendExportBtn" onclick="exportAttendanceCSV()" disabled>📥 Export CSV</button>
+                <button class="btn btn-danger btn-sm"   id="attendDeleteDateBtn" onclick="deleteAttendanceByDate()" disabled>🗑️ Delete Date</button>
             </div>
             <div class="attend-summary" id="attendSummary"></div>
             <div class="attend-table-wrap">
@@ -1425,6 +1438,26 @@ function empRow(e){
 function renderView(view){
     activeViewTab=view;
     document.querySelectorAll('.view-tab').forEach(t=>{const v=t.dataset.view;t.className='view-tab'+(v===view?' active-'+view:'');});
+
+    // Violations tab — only show Missing/Incomplete/Half Day employees
+    if(view==='violations'){
+        const viols = lastReport.filter(r=>r.status==='Missing'||r.status==='Incomplete'||r.status==='Half Day');
+        document.getElementById('statsLabel').textContent = '🚨 Violations Only';
+        renderStats(viols);
+        if(!viols.length){
+            document.getElementById('tableContainer').innerHTML='<p style="padding:20px;color:#27ae60;font-weight:600;text-align:center;">✅ No violations for this date!</p>';
+            return;
+        }
+        const ann=viols.filter(r=>r.team==='annotation'), ass=viols.filter(r=>r.team==='assessment');
+        let rows='';
+        if(ann.length) rows+=`<tr class="team-header-row annotation"><td colspan="6">🔵 Data Annotation — Violations (${ann.length})</td></tr>`+ann.map(empRow).join('');
+        if(ass.length) rows+=`<tr class="team-header-row assessment"><td colspan="6">🟠 Data Assessment — Violations (${ass.length})</td></tr>`+ass.map(empRow).join('');
+        document.getElementById('tableContainer').innerHTML=`
+            <table><thead><tr><th>Employee</th><th>Team</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th></tr></thead>
+            <tbody>${rows}</tbody></table>`;
+        return;
+    }
+
     const filtered=view==='all'?lastReport:lastReport.filter(r=>r.team===view);
     document.getElementById('statsLabel').textContent=view==='all'?'All Employees':view==='annotation'?'Data Annotation':'Data Assessment / DA';
     renderStats(filtered);
@@ -1549,7 +1582,7 @@ async function refreshAttendDateSelect(){
     sel.innerHTML = '<option value="">— Pick a date —</option>';
     allDates.forEach(d=>{
         const opt = document.createElement('option');
-        opt.value = d; opt.textContent = formatDate(d);
+        opt.value = d; opt.textContent = getDayName(d) + ' — ' + formatDate(d);
         sel.appendChild(opt);
     });
     if(prev && allDates.includes(prev)) sel.value = prev;
@@ -1557,17 +1590,36 @@ async function refreshAttendDateSelect(){
 
 async function loadAttendance(){
     const dateStr = document.getElementById('attendDateSelect').value;
-    if(!dateStr){ document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>'; return; }
+    if(!dateStr){
+        document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
+        document.getElementById('attendSummary').innerHTML='';
+        return;
+    }
     attendCurrentDate = dateStr;
     document.getElementById('attendAddBtn').disabled = false;
     document.getElementById('attendExportBtn').disabled = false;
+    document.getElementById('attendDeleteDateBtn').disabled = false;
     document.getElementById('attendContent').innerHTML = '<div class="no-attend">Loading…</div>';
     try{
         attendRows = await dbLoadAttendance(dateStr);
+        populateAttendEmpFilter();
         renderAttendance(dateStr);
     } catch(e){
         document.getElementById('attendContent').innerHTML = '<div class="no-attend">❌ Failed to load: '+e.message+'</div>';
     }
+}
+
+function populateAttendEmpFilter(){
+    const sel = document.getElementById('attendEmpFilter');
+    const prev = sel.value;
+    const allEmp = [...teams.annotation.map(n=>n), ...teams.assessment.map(n=>n)].sort();
+    sel.innerHTML = '<option value="">All Employees</option>' +
+        allEmp.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if(prev) sel.value = prev;
+}
+
+function renderAttendanceFiltered(){
+    if(attendCurrentDate) renderAttendance(attendCurrentDate);
 }
 
 function calcWorkingHours(login, logout){
@@ -1578,12 +1630,98 @@ function calcWorkingHours(login, logout){
     return (diff/60).toFixed(2) + ' hrs';
 }
 
-function renderAttendance(dateStr){
-    window._attendRowMap = {}; // clear map on each render
-    const allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
-                    ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
+// Show all attendance records across all dates for a single employee
+async function renderEmployeeHistory(empName){
     const content = document.getElementById('attendContent');
     const badge   = document.getElementById('attendBadge');
+    badge.textContent = esc(empName) + ' — All Dates';
+    content.innerHTML = '<div class="no-attend">Loading history…</div>';
+
+    try{
+        // Load from attendance_records table across all dates for this employee
+        const rows = await sbFetch(ATTEND_TABLE + '?name=eq.' + encodeURIComponent(empName) + '&order=date.desc&select=*');
+
+        // Also gather violation records for this employee
+        const viols = dbRows.filter(r=>r.name===empName);
+
+        // Merge: attendance_records takes priority
+        const allDates = [...new Set([...rows.map(r=>r.date), ...viols.map(r=>r.date)])].sort().reverse();
+
+        if(!allDates.length){
+            content.innerHTML = '<div class="no-attend">No attendance records found for ' + esc(empName) + '.</div>';
+            document.getElementById('attendSummary').innerHTML = '';
+            return;
+        }
+
+        const merged = allDates.map(date=>{
+            const saved = rows.find(r=>r.date===date);
+            if(saved) return saved;
+            const viol = viols.find(r=>r.date===date);
+            if(viol) return {
+                date, name:empName,
+                status: viol.resolution==='On Leave'?'On Leave': viol.status==='Missing'?'Absent': viol.status==='Incomplete'?'Incomplete':'Present',
+                login: viol.login||'', logout: viol.logout||'', notes:''
+            };
+            return {date, name:empName, status:'Unknown', login:'', logout:'', notes:''};
+        });
+
+        // Summary for this employee
+        const fullDay  = merged.filter(r=>r.status==='Full Day'||r.status==='Present').length;
+        const halfDay  = merged.filter(r=>r.status==='Half Day').length;
+        const absent   = merged.filter(r=>r.status==='Absent').length;
+        const onLeave  = merged.filter(r=>r.status==='On Leave').length;
+        const inc      = merged.filter(r=>r.status==='Incomplete').length;
+
+        document.getElementById('attendSummary').innerHTML = `
+            <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total Days</div></div>
+            <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay}</div><div class="al">✅ Full Day</div></div>
+            <div class="attend-stat"><div class="av" style="color:#e67e22">${halfDay}</div><div class="al">🌓 Half Day</div></div>
+            <div class="attend-stat"><div class="av" style="color:#e67e22">${inc}</div><div class="al">⚠️ Incomplete</div></div>
+            <div class="attend-stat"><div class="av" style="color:#dc3545">${absent}</div><div class="al">❌ Absent</div></div>
+            <div class="attend-stat"><div class="av" style="color:#6c757d">${onLeave}</div><div class="al">📅 On Leave</div></div>`;
+
+        const rowsHtml = merged.map(r=>{
+            const badgeCls = r.status==='Full Day'||r.status==='Present'?'ab-fullday':
+                             r.status==='Half Day'?'ab-halfday':
+                             r.status==='Incomplete'?'ab-incomplete':
+                             r.status==='Absent'?'ab-absent':'ab-leave';
+            const hours = calcWorkingHours(r.login, r.logout);
+            const loginTxt  = r.login  && r.login!=='❌ No login'  ? r.login  : '—';
+            const logoutTxt = r.logout && r.logout!=='❌ No logout' ? r.logout : '—';
+            return `<tr>
+                <td><strong>${formatDate(r.date)}</strong></td>
+                <td style="color:#888;font-size:12px;">${getDayName(r.date)}</td>
+                <td><span class="attend-badge ${badgeCls}">${r.status}</span></td>
+                <td><span class="time-badge">${loginTxt}</span></td>
+                <td><span class="time-badge">${logoutTxt}</span></td>
+                <td><strong>${hours}</strong></td>
+                <td>${r.notes?'<span style="color:#888;font-size:12px;">'+esc(r.notes)+'</span>':''}</td>
+            </tr>`;
+        }).join('');
+
+        content.innerHTML = `<table class="attend-table">
+            <thead><tr><th>Date</th><th>Day</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th><th>Notes</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>`;
+    } catch(e){
+        content.innerHTML = '<div class="no-attend">❌ Error loading history: '+e.message+'</div>';
+    }
+}
+
+function renderAttendance(dateStr){
+    window._attendRowMap = {}; // clear map on each render
+    const empFilter = document.getElementById('attendEmpFilter') ? document.getElementById('attendEmpFilter').value : '';
+    let allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
+                  ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
+    if(empFilter) allEmp = allEmp.filter(e=>e.name===empFilter);
+    const content = document.getElementById('attendContent');
+    const badge   = document.getElementById('attendBadge');
+
+    // If filtering by employee, show their full history across all dates
+    if(empFilter){
+        renderEmployeeHistory(empFilter);
+        return;
+    }
 
     // Build merged list: start from all employees, overlay saved records
     const merged = allEmp.map(e=>{
@@ -1613,7 +1751,7 @@ function renderAttendance(dateStr){
     const onLeave    = merged.filter(r=>r.status==='On Leave').length;
     const unknown    = merged.filter(r=>r.status==='Unknown').length;
 
-    badge.textContent = formatDate(dateStr);
+    badge.textContent = formatDateWithDay(dateStr);
     document.getElementById('attendSummary').innerHTML = `
         <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total</div></div>
         <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay + present}</div><div class="al">✅ Full Day</div></div>
@@ -1770,6 +1908,31 @@ async function deleteAttendEntry(id){
     });
 }
 
+async function deleteAttendanceByDate(){
+    const dateStr = attendCurrentDate;
+    if(!dateStr){ showToast('No date selected.'); return; }
+    const count = attendRows.length;
+    openConfirm(
+        'Delete Attendance',
+        'This will permanently delete all <strong>'+count+' attendance records</strong> for <strong>'+formatDateWithDay(dateStr)+'</strong>.',
+        async ()=>{
+            setSyncStatus('loading','Deleting attendance for '+formatDate(dateStr)+'…');
+            try{
+                for(const r of attendRows){ await dbDeleteAttendance(r.id); }
+                attendRows = [];
+                await refreshAttendDateSelect();
+                renderAttendance(dateStr);
+                document.getElementById('attendSummary').innerHTML='';
+                document.getElementById('attendDeleteDateBtn').disabled=true;
+                showToast('🗑️ Attendance records for '+formatDate(dateStr)+' deleted.');
+                setSyncStatus('ok','✅ Deleted.');
+            } catch(e){
+                setSyncStatus('error','❌ Delete failed: '+e.message);
+            }
+        }
+    );
+}
+
 function exportAttendanceCSV(){
     if(!attendCurrentDate){ showToast('Select a date first.'); return; }
     const allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
@@ -1847,7 +2010,9 @@ async function processMessages(){
     let dateStr=document.getElementById('reportDate').value;
     if(!dateStr)dateStr=new Date().toISOString().split('T')[0];
     const ann=lastReport.filter(r=>r.team==='annotation'),ass=lastReport.filter(r=>r.team==='assessment');
+    const viols=lastReport.filter(r=>r.status==='Missing'||r.status==='Incomplete'||r.status==='Half Day');
     document.getElementById('tcAll').textContent=lastReport.length;
+    document.getElementById('tcViolations').textContent=viols.length;
     document.getElementById('tcAnnotation').textContent=ann.length;
     document.getElementById('tcAssessment').textContent=ass.length;
     document.getElementById('viewTabs').style.display='flex';
