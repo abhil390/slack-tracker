@@ -267,6 +267,22 @@
         .footer{text-align:center;margin-top:20px;color:#666;font-size:13px;}
         .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2c3e50;color:white;padding:12px 24px;border-radius:30px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999;}
         .toast.show{opacity:1;}
+
+        /* Date confirm modal */
+        .modal-dateconfirm{background:white;border-radius:16px;width:90%;max-width:460px;box-shadow:0 12px 50px rgba(0,0,0,.3);overflow:hidden;}
+        .modal-dateconfirm-header{background:linear-gradient(135deg,#e67e22,#d35400);color:white;padding:20px 24px;}
+        .modal-dateconfirm-header h3{font-size:17px;font-weight:700;margin-bottom:4px;}
+        .modal-dateconfirm-header p{font-size:13px;opacity:.9;}
+        .modal-dateconfirm-body{padding:24px;}
+        .modal-dateconfirm-body .date-display{background:#fff8f0;border:2px solid #e67e22;border-radius:10px;padding:14px;text-align:center;font-size:22px;font-weight:800;color:#d35400;letter-spacing:2px;margin-bottom:16px;}
+        .modal-dateconfirm-body .date-day{font-size:13px;color:#888;text-align:center;margin-top:-10px;margin-bottom:16px;}
+        .modal-dateconfirm-body p{font-size:13px;color:#555;margin-bottom:10px;line-height:1.6;}
+        .modal-dateconfirm-body input{width:100%;padding:11px 14px;border:2px solid #e0e0e0;border-radius:9px;font-size:15px;font-weight:700;letter-spacing:2px;text-align:center;box-sizing:border-box;}
+        .modal-dateconfirm-body input:focus{outline:none;border-color:#e67e22;}
+        .modal-dateconfirm-body input.match{border-color:#27ae60;background:#f0fff4;color:#155724;}
+        .modal-dateconfirm-body input.wrong{border-color:#dc3545;background:#fff5f5;color:#721c24;}
+        .modal-dateconfirm-hint{font-size:12px;margin-top:6px;text-align:center;min-height:16px;}
+        .modal-dateconfirm-footer{padding:14px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
         .team-select{padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;cursor:pointer;}
         .team-select:focus{outline:none;border-color:#1a4d8c;}
         /* ══ LOGIN SCREEN ══ */
@@ -319,7 +335,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.9</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.0</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -599,6 +615,27 @@
         <div class="modal-edit-footer">
             <button class="btn btn-secondary" id="editCancel">Cancel</button>
             <button class="btn btn-primary"   id="editSave">💾 Save to Cloud</button>
+        </div>
+    </div>
+</div>
+
+<!-- Date Confirm Modal -->
+<div class="modal-overlay" id="dateConfirmOverlay">
+    <div class="modal-dateconfirm">
+        <div class="modal-dateconfirm-header">
+            <h3>⚠️ Confirm Date Before Saving</h3>
+            <p>Please verify the date is correct before proceeding.</p>
+        </div>
+        <div class="modal-dateconfirm-body">
+            <div class="date-display" id="dcDateDisplay"></div>
+            <div class="date-day" id="dcDayDisplay"></div>
+            <p>Type the date shown above in <strong>DD/MM/YYYY</strong> format to confirm:</p>
+            <input type="text" id="dcInput" placeholder="e.g. 19/02/2026" autocomplete="off" maxlength="10"/>
+            <div class="modal-dateconfirm-hint" id="dcHint"></div>
+        </div>
+        <div class="modal-dateconfirm-footer">
+            <button class="btn btn-secondary" id="dcCancelBtn">✖ Cancel</button>
+            <button class="btn btn-primary"   id="dcConfirmBtn" disabled>✅ Yes, Process & Save</button>
         </div>
     </div>
 </div>
@@ -2237,15 +2274,70 @@ function exportAttendanceCSV(){
 
 // Save ALL employees' attendance from Slack report to attendance_records table
 
+// ── Date confirmation modal ──
+function openDateConfirm(dateStr, onConfirm){
+    // Format date as DD/MM/YYYY for user to type
+    const [y,m,d] = dateStr.split('-');
+    const displayDMY = d+'/'+m+'/'+y;
+
+    document.getElementById('dcDateDisplay').textContent = displayDMY;
+    document.getElementById('dcDayDisplay').textContent  = getDayName(dateStr) + ', ' + formatDate(dateStr);
+    document.getElementById('dcInput').value   = '';
+    document.getElementById('dcInput').className = '';
+    document.getElementById('dcHint').textContent = '';
+    document.getElementById('dcConfirmBtn').disabled = true;
+    document.getElementById('dateConfirmOverlay').classList.add('open');
+    setTimeout(()=>document.getElementById('dcInput').focus(), 120);
+
+    // Wire confirm button for this call
+    const confirmBtn = document.getElementById('dcConfirmBtn');
+    const newBtn = confirmBtn.cloneNode(true); // remove old listeners
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    newBtn.disabled = true;
+    newBtn.addEventListener('click', ()=>{
+        document.getElementById('dateConfirmOverlay').classList.remove('open');
+        onConfirm();
+    });
+
+    // Input validation
+    const input = document.getElementById('dcInput');
+    const newInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newInput, input);
+    newInput.addEventListener('input', function(){
+        const val   = this.value.trim();
+        const match = val === displayDMY;
+        const hint  = document.getElementById('dcHint');
+        newBtn.disabled = !match;
+        if(!val){ this.className=''; hint.textContent=''; return; }
+        if(match){
+            this.className='match';
+            hint.innerHTML='<span style="color:#27ae60;font-weight:600;">✅ Date confirmed!</span>';
+        } else {
+            this.className='wrong';
+            hint.innerHTML='<span style="color:#dc3545;">Expected: <strong>'+displayDMY+'</strong></span>';
+        }
+    });
+    newInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !newBtn.disabled) newBtn.click(); });
+}
+
+function closeDateConfirm(){
+    document.getElementById('dateConfirmOverlay').classList.remove('open');
+}
+
 async function processMessages(){
     const input = document.getElementById('slackInput').value.trim();
     if(!input){ alert('Please paste some Slack messages first!'); return; }
     const msgs = parseMessages(input);
     if(!msgs.length){ alert('No valid messages detected.'); return; }
 
-    lastReport = buildReport(msgs);
     let dateStr = document.getElementById('reportDate').value;
     if(!dateStr) dateStr = new Date().toISOString().split('T')[0];
+
+    // Show date confirmation modal — only proceed after user types the date
+    openDateConfirm(dateStr, ()=> doProcessMessages(dateStr));
+}
+
+async function doProcessMessages(dateStr){
 
     // ── Step 1: Show results instantly (synchronous, no DB needed) ──
     const ann   = lastReport.filter(r=>r.team==='annotation');
@@ -2392,6 +2484,10 @@ async function initApp(){
     document.getElementById('attendLogin') .addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendLogout').addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendCloseBtn').addEventListener('click', closeAttendanceModal);
+    document.getElementById('dcCancelBtn').addEventListener('click', closeDateConfirm);
+    document.getElementById('dateConfirmOverlay').addEventListener('click', e=>{
+        if(e.target===document.getElementById('dateConfirmOverlay')) closeDateConfirm();
+    });
     // Populate searchable employee filter after teams are loaded
     populateAttendEmpFilter();
     document.getElementById('attendOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('attendOverlay')) closeAttendanceModal(); });
