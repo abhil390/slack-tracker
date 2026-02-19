@@ -292,7 +292,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.0</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.1</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1603,7 +1603,7 @@ function renderAttendance(dateStr){
         const badgeCls = r.status==='Present'?'ab-present':
                          r.status==='Incomplete'?'ab-incomplete':
                          r.status==='Absent'?'ab-absent':'ab-leave';
-        const manualBadge = r.fromDB ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
+        const manualBadge = r.source === 'manual' ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
         const teamBadge   = `<span class="team-badge ${r.team}">${r.team==='annotation'?'Annotation':'Assessment'}</span>`;
         const hours       = calcWorkingHours(r.login, r.logout);
         const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Absent'||r.status==='On Leave'||r.status==='Unknown')?'—':'❌ Missing';
@@ -1695,7 +1695,8 @@ async function saveManualEntry(){
         status: status,
         login:  (status==='Absent'||status==='On Leave') ? '' : login,
         logout: (status==='Absent'||status==='On Leave') ? '' : logout,
-        notes:  notes
+        notes:  notes,
+        source: 'manual'   // manually entered by user
     };
     if(!rowId) delete row.id;
 
@@ -1777,7 +1778,8 @@ async function saveAttendanceFromReport(dateStr, report){
                 status: status,
                 login:  cleanLogin,
                 logout: cleanLogout,
-                notes:  ''
+                notes:  '',
+                source: 'slack'   // auto-saved from Slack — not manually entered
             };
             await dbSaveAttendance(row);
         }
