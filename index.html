@@ -265,6 +265,32 @@
 
         .debug-info{background:#f8f9fa;padding:10px;margin:10px 0;border-radius:5px;font-size:12px;color:#666;max-height:200px;overflow:auto;display:none;border:1px solid #dee2e6;font-family:monospace;}
         .footer{text-align:center;margin-top:20px;color:#666;font-size:13px;}
+        /* Master Delete */
+        .master-delete-wrap{display:flex;align-items:center;gap:10px;margin-right:12px;}
+        .master-delete-date{color:rgba(255,255,255,.85);font-size:12px;font-weight:600;background:rgba(220,53,69,.25);padding:4px 10px;border-radius:20px;border:1px solid rgba(220,53,69,.4);}
+        #masterDeleteBtn{background:#dc3545;color:white;font-size:12px;padding:6px 14px;border:none;font-weight:700;letter-spacing:.3px;}
+        #masterDeleteBtn:hover{background:#c0392b;}
+
+        .modal-master-delete{background:white;border-radius:16px;width:90%;max-width:480px;box-shadow:0 16px 60px rgba(0,0,0,.35);overflow:hidden;}
+        .modal-master-delete-header{background:linear-gradient(135deg,#c0392b,#922b21);color:white;padding:22px 24px;display:flex;align-items:center;gap:16px;}
+        .mdd-icon{font-size:32px;flex-shrink:0;}
+        .modal-master-delete-header h3{font-size:18px;font-weight:800;margin-bottom:4px;}
+        .modal-master-delete-header p{font-size:13px;opacity:.85;margin:0;}
+        .modal-master-delete-body{padding:24px;}
+        .mdd-date-box{background:#fff5f5;border:2px solid #f5c6cb;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;}
+        .mdd-date-main{font-size:24px;font-weight:800;color:#c0392b;letter-spacing:1px;}
+        .mdd-date-sub{font-size:13px;color:#888;margin-top:4px;}
+        .mdd-what{background:#f8f9fa;border-radius:8px;padding:12px 16px;margin-bottom:16px;}
+        .mdd-what-item{font-size:13px;color:#555;padding:4px 0;border-bottom:1px solid #eee;}
+        .mdd-what-item:last-child{border-bottom:none;}
+        .mdd-instruction{font-size:13px;color:#333;margin-bottom:10px;font-weight:600;}
+        .modal-master-delete-body input{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:9px;font-size:16px;font-weight:800;letter-spacing:3px;text-align:center;box-sizing:border-box;text-transform:uppercase;}
+        .modal-master-delete-body input:focus{outline:none;border-color:#dc3545;}
+        .modal-master-delete-body input.match{border-color:#dc3545;background:#fff5f5;color:#c0392b;}
+        .modal-master-delete-body input.wrong{border-color:#e0e0e0;}
+        .mdd-hint{font-size:12px;text-align:center;min-height:18px;margin-top:6px;}
+        .modal-master-delete-footer{padding:14px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
+
         .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#2c3e50;color:white;padding:12px 24px;border-radius:30px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999;}
         .toast.show{opacity:1;}
 
@@ -331,11 +357,15 @@
 
     <div class="header">
         <div class="top-user-bar">
+            <div class="master-delete-wrap" id="masterDeleteWrap" style="display:none;">
+                <span class="master-delete-date" id="masterDeleteDateLabel"></span>
+                <button class="btn btn-danger" id="masterDeleteBtn" onclick="openMasterDelete()">🗑️ Delete Date</button>
+            </div>
             <span style="color:rgba(255,255,255,.7);font-size:13px;">Logged in as:</span>
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.4</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.5</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -448,7 +478,6 @@
                         <option value="">— Select a date —</option>
                     </select>
                     <button class="btn btn-secondary btn-sm" id="dateReenterBtn" onclick="preloadSelectedDate()" disabled>✏️ Re-enter Data</button>
-                    <button class="btn btn-danger btn-sm"   id="dateDeleteBtn"  onclick="deleteSelectedDate()"  disabled>🗑️ Delete Date</button>
                 </div>
                 <div class="date-manager-meta" id="dateMeta"></div>
             </div>
@@ -478,7 +507,6 @@
                 </div>
                 <button class="btn btn-success btn-sm" id="attendAddBtn" onclick="openAttendanceModal()" disabled>➕ Add / Edit Entry</button>
                 <button class="btn btn-secondary btn-sm" id="attendExportBtn" onclick="exportAttendanceCSV()" disabled>📥 Export CSV</button>
-                <button class="btn btn-danger btn-sm"   id="attendDeleteDateBtn" onclick="deleteAttendanceByDate()" disabled>🗑️ Delete Date</button>
             </div>
             <!-- Date range row — shown only when an employee is selected -->
             <div class="attend-range-row" id="attendRangeRow" style="display:none;">
@@ -615,6 +643,38 @@
         <div class="modal-edit-footer">
             <button class="btn btn-secondary" id="editCancel">Cancel</button>
             <button class="btn btn-primary"   id="editSave">💾 Save to Cloud</button>
+        </div>
+    </div>
+</div>
+
+<!-- Master Delete Modal -->
+<div class="modal-overlay" id="masterDeleteOverlay">
+    <div class="modal-master-delete">
+        <div class="modal-master-delete-header">
+            <div class="mdd-icon">🗑️</div>
+            <div>
+                <h3>Delete All Data</h3>
+                <p id="mddSubtitle">This action cannot be undone.</p>
+            </div>
+        </div>
+        <div class="modal-master-delete-body">
+            <div class="mdd-date-box">
+                <div class="mdd-date-main" id="mddDateMain"></div>
+                <div class="mdd-date-sub"  id="mddDateSub"></div>
+            </div>
+            <div class="mdd-what">
+                <div class="mdd-what-item">🚨 All violation records for this date</div>
+                <div class="mdd-what-item">📊 All attendance records for this date</div>
+                <div class="mdd-what-item">✅ All resolved/ignored entries for this date</div>
+            </div>
+            <p class="mdd-instruction">Type <strong>DELETE</strong> below to confirm:</p>
+            <input type="text" id="mddInput" placeholder="Type DELETE here…" autocomplete="off" maxlength="10"
+                   oninput="onMddInput()" onkeydown="onMddKey(event)"/>
+            <div class="mdd-hint" id="mddHint"></div>
+        </div>
+        <div class="modal-master-delete-footer">
+            <button class="btn btn-secondary" onclick="closeMasterDelete()">✖ Cancel</button>
+            <button class="btn btn-danger"    id="mddConfirmBtn" disabled onclick="onMddConfirm()">🗑️ Delete Everything</button>
         </div>
     </div>
 </div>
@@ -1119,6 +1179,7 @@ function renderDateManager(){
 function onDateSelectChange(){
     const sel      = document.getElementById('dateSelect');
     const dateStr  = sel.value;
+    updateMasterDeleteBtn(dateStr);
     const meta     = document.getElementById('dateMeta');
     const reBtn    = document.getElementById('dateReenterBtn');
     const delBtn   = document.getElementById('dateDeleteBtn');
@@ -1151,37 +1212,11 @@ function preloadSelectedDate(){
 }
 
 function deleteSelectedDate(){
+    // Redirects to master delete
     const dateStr = document.getElementById('dateSelect').value;
     if(!dateStr) return;
-    const count = dbRows.filter(r=>r.date===dateStr).length;
-    openConfirm(
-        'Delete Date',
-        'This will permanently delete <strong>all '+count+' records</strong> for <strong>'+formatDate(dateStr)+'</strong>.<br><br>You can then paste fresh data for this date.',
-        async ()=>{
-            setSyncStatus('loading','Deleting records for '+formatDate(dateStr)+'…');
-            try{
-                // Delete violation_history and attendance_records for this date
-                await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
-                    method:'DELETE', prefer:'return=minimal'
-                });
-                await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
-                    method:'DELETE', prefer:'return=minimal'
-                }).catch(()=>{});
-                // Remove from local cache
-                dbRows = dbRows.filter(r=>r.date!==dateStr);
-                attendRows = attendRows.filter(r=>r.date!==dateStr);
-                renderHistory(getHistFilters());
-                renderDateManager();
-                refreshAttendDateSelect();
-                document.getElementById('reportDate').value = dateStr;
-                showToast('🗑️ Deleted records for '+formatDate(dateStr)+'. Paste fresh data and click Process.');
-                setSyncStatus('ok','✅ Date deleted.');
-            } catch(e){
-                setSyncStatus('error','❌ Delete failed: '+e.message);
-                showToast('❌ Delete failed: '+e.message);
-            }
-        }
-    );
+    updateMasterDeleteBtn(dateStr);
+    openMasterDelete();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1748,12 +1783,13 @@ async function loadAttendance(){
     if(!dateStr){
         document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
         document.getElementById('attendSummary').innerHTML='';
+        updateMasterDeleteBtn('');
         return;
     }
     attendCurrentDate = dateStr;
+    updateMasterDeleteBtn(dateStr);
     document.getElementById('attendAddBtn').disabled = false;
     document.getElementById('attendExportBtn').disabled = false;
-    document.getElementById('attendDeleteDateBtn').disabled = false;
     document.getElementById('attendContent').innerHTML = '<div class="no-attend">Loading…</div>';
     try{
         // Only load manual overrides — auto attendance is derived from dbRows in memory
@@ -2202,74 +2238,11 @@ async function deleteAttendEntry(id){
     });
 }
 
-async function deleteAttendanceByDate(){
-    const dateStr = attendCurrentDate;
-    if(!dateStr){ showToast('No date selected.'); return; }
-    const totalCount = dbRows.filter(r=>r.date===dateStr).length;
-    openConfirm(
-        '🗑️ Delete All Data for ' + formatDate(dateStr),
-        'This will permanently delete <strong>all '+totalCount+' records</strong> (attendance + violations) for <strong>'+formatDateWithDay(dateStr)+'</strong>.<br><br>This cannot be undone.',
-        async ()=>{
-            setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
-            try{
-                // Delete from violation_history
-                await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
-                    method:'DELETE', prefer:'return=minimal'
-                });
-                // Delete from attendance_records (best-effort)
-                await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
-                    method:'DELETE', prefer:'return=minimal'
-                }).catch(()=>{});
-
-                // ── Instantly update everything in memory ──
-                dbRows       = dbRows.filter(r=>r.date!==dateStr);
-                attendRows   = [];
-                lastReport   = []; // clear so isCurrentDate check doesn't show stale data
-                attendCurrentDate = '';
-
-                // Remove deleted date from dropdown immediately (no full re-render)
-                const sel = document.getElementById('attendDateSelect');
-                const opt = sel.querySelector(`option[value="${dateStr}"]`);
-                if(opt) opt.remove();
-                sel.value = '';
-
-                // Also remove from violation history date manager
-                const dmSel = document.getElementById('dateSelect');
-                if(dmSel){
-                    const dmOpt = dmSel.querySelector(`option[value="${dateStr}"]`);
-                    if(dmOpt) dmOpt.remove();
-                    dmSel.value = '';
-                    document.getElementById('dateMeta').textContent = '';
-                    const reBtn = document.getElementById('dateReenterBtn');
-                    const delBtn = document.getElementById('dateDeleteBtn');
-                    if(reBtn)  reBtn.disabled  = true;
-                    if(delBtn) delBtn.disabled = true;
-                }
-
-                // Reset attendance panel to empty state instantly
-                document.getElementById('attendBadge').textContent   = 'Select a date';
-                document.getElementById('attendSummary').innerHTML   = '';
-                document.getElementById('attendContent').innerHTML   = '<div class="no-attend">Data for '+formatDate(dateStr)+' has been deleted. Select another date.</div>';
-                document.getElementById('attendAddBtn').disabled      = true;
-                document.getElementById('attendExportBtn').disabled   = true;
-                document.getElementById('attendDeleteDateBtn').disabled = true;
-
-                // Hide today's results panel if it was showing this date
-                document.getElementById('viewTabs').style.display    = 'none';
-                document.getElementById('resultsArea').style.display = 'none';
-
-                // Re-render violation history from updated cache
-                renderHistory(getHistFilters());
-                updateHistBadge();
-
-                showToast('🗑️ All data for '+formatDate(dateStr)+' deleted.');
-                setSyncStatus('ok','✅ Deleted successfully.');
-            } catch(e){
-                setSyncStatus('error','❌ Delete failed: '+e.message);
-                showToast('❌ Delete failed: '+e.message);
-            }
-        }
-    );
+function deleteAttendanceByDate(){
+    // Redirects to master delete
+    if(!attendCurrentDate){ showToast('Select a date first.'); return; }
+    updateMasterDeleteBtn(attendCurrentDate);
+    openMasterDelete();
 }
 
 function exportAttendanceCSV(){
@@ -2301,6 +2274,121 @@ function exportAttendanceCSV(){
 // ══════════════════════════════════════════════════════════════
 
 // Save ALL employees' attendance from Slack report to attendance_records table
+
+// ══════════════════════════════════════════════════════════════
+//  MASTER DELETE
+// ══════════════════════════════════════════════════════════════
+let _masterDeleteDate = '';
+
+// Call this whenever selected date changes to update the header button
+function updateMasterDeleteBtn(dateStr){
+    _masterDeleteDate = dateStr || '';
+    const wrap  = document.getElementById('masterDeleteWrap');
+    const label = document.getElementById('masterDeleteDateLabel');
+    if(_masterDeleteDate){
+        label.textContent = formatDateWithDay(_masterDeleteDate);
+        wrap.style.display = 'flex';
+    } else {
+        wrap.style.display = 'none';
+    }
+}
+
+function openMasterDelete(){
+    if(!_masterDeleteDate){ showToast('Select a date first.'); return; }
+    const count = dbRows.filter(r=>r.date===_masterDeleteDate).length;
+    document.getElementById('mddDateMain').textContent = formatDate(_masterDeleteDate);
+    document.getElementById('mddDateSub').textContent  = getDayName(_masterDeleteDate);
+    document.getElementById('mddSubtitle').textContent = count + ' record'+(count!==1?'s':'')+' will be permanently deleted.';
+    document.getElementById('mddInput').value     = '';
+    document.getElementById('mddInput').className = '';
+    document.getElementById('mddHint').textContent = '';
+    document.getElementById('mddConfirmBtn').disabled = true;
+    document.getElementById('masterDeleteOverlay').classList.add('open');
+    setTimeout(()=>document.getElementById('mddInput').focus(), 120);
+}
+
+function closeMasterDelete(){
+    document.getElementById('masterDeleteOverlay').classList.remove('open');
+}
+
+function onMddInput(){
+    const val   = document.getElementById('mddInput').value.toUpperCase().trim();
+    const match = val === 'DELETE';
+    const btn   = document.getElementById('mddConfirmBtn');
+    const hint  = document.getElementById('mddHint');
+    const inp   = document.getElementById('mddInput');
+    btn.disabled = !match;
+    if(!val){ inp.className=''; hint.textContent=''; return; }
+    if(match){
+        inp.className='match';
+        hint.innerHTML='<span style="color:#c0392b;font-weight:700;">⚠️ This will permanently delete all data for this date.</span>';
+    } else {
+        inp.className='wrong';
+        hint.innerHTML='<span style="color:#aaa;">Type DELETE in capitals to confirm</span>';
+    }
+}
+
+function onMddKey(e){
+    if(e.key==='Enter' && !document.getElementById('mddConfirmBtn').disabled) onMddConfirm();
+    if(e.key==='Escape') closeMasterDelete();
+}
+
+async function onMddConfirm(){
+    closeMasterDelete();
+    const dateStr = _masterDeleteDate;
+    if(!dateStr) return;
+
+    setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
+    try{
+        // Delete from both tables
+        await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE', prefer:'return=minimal'});
+        await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE', prefer:'return=minimal'}).catch(()=>{});
+
+        // Update in-memory caches
+        dbRows       = dbRows.filter(r=>r.date!==dateStr);
+        attendRows   = [];
+        lastReport   = [];
+        attendCurrentDate = '';
+        _masterDeleteDate = '';
+
+        // Remove date from BOTH dropdowns instantly
+        ['attendDateSelect','dateSelect'].forEach(id=>{
+            const sel = document.getElementById(id);
+            if(!sel) return;
+            const opt = sel.querySelector(`option[value="${dateStr}"]`);
+            if(opt) opt.remove();
+            sel.value = '';
+        });
+
+        // Reset attendance panel
+        document.getElementById('attendBadge').textContent   = 'Select a date';
+        document.getElementById('attendSummary').innerHTML   = '';
+        document.getElementById('attendContent').innerHTML   = '<div class="no-attend">Data deleted. Select another date to view.</div>';
+        document.getElementById('attendAddBtn').disabled      = true;
+        document.getElementById('attendExportBtn').disabled   = true;
+
+        // Reset date manager meta
+        const meta   = document.getElementById('dateMeta');
+        const reBtn  = document.getElementById('dateReenterBtn');
+        if(meta)  meta.textContent = '';
+        if(reBtn) reBtn.disabled = true;
+
+        // Hide today's results if it was this date
+        document.getElementById('viewTabs').style.display    = 'none';
+        document.getElementById('resultsArea').style.display = 'none';
+
+        // Re-render violation history from updated cache
+        renderHistory(getHistFilters());
+        renderDateManager();
+        updateMasterDeleteBtn('');
+
+        showToast('🗑️ All data for '+formatDate(dateStr)+' deleted.');
+        setSyncStatus('ok','✅ Deleted successfully.');
+    } catch(e){
+        setSyncStatus('error','❌ Delete failed: '+e.message);
+        showToast('❌ Delete failed: '+e.message);
+    }
+}
 
 // ── Date confirmation modal ──
 let _dcPendingCallback = null;
@@ -2387,7 +2475,7 @@ async function doProcessMessages(dateStr){
     document.getElementById('attendDateSelect').value = dateStr;
     document.getElementById('attendAddBtn').disabled        = false;
     document.getElementById('attendExportBtn').disabled     = false;
-    document.getElementById('attendDeleteDateBtn').disabled = false;
+    updateMasterDeleteBtn(dateStr);
     // Fetch only manual overrides for this date (small, fast query)
     dbLoadAttendance(dateStr).then(rows=>{
         attendRows = rows;
