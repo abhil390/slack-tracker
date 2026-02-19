@@ -292,7 +292,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v6.9</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.0</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1006,7 +1006,11 @@ function deleteSelectedDate(){
             setSyncStatus('loading','Deleting records for '+formatDate(dateStr)+'…');
             try{
                 await dbDeleteByDate(dateStr);
+                // Also delete attendance records for this date
+                const attendForDate = await dbLoadAttendance(dateStr);
+                for(const r of attendForDate){ try{ await dbDeleteAttendance(r.id); } catch(e){} }
                 await loadFromCloud();
+                await refreshAttendDateSelect();
                 document.getElementById('reportDate').value = dateStr;
                 showToast('🗑️ Deleted all records for '+formatDate(dateStr)+'. Paste fresh data and click Process.');
             } catch(e){
@@ -1744,6 +1748,44 @@ function exportAttendanceCSV(){
 // ══════════════════════════════════════════════════════════════
 //  MAIN ACTIONS
 // ══════════════════════════════════════════════════════════════
+
+// Save ALL employees' attendance from Slack report to attendance_records table
+async function saveAttendanceFromReport(dateStr, report){
+    try{
+        // Load existing attendance records for this date so we don't overwrite manual edits
+        const existing = await dbLoadAttendance(dateStr);
+
+        for(const r of report){
+            // Skip if a manual entry already exists for this employee on this date
+            const manualEntry = existing.find(e => e.name === r.name);
+            if(manualEntry) continue; // preserve manual edits
+
+            // Map report status to attendance status
+            let status = 'Present';
+            if(r.status === 'On Leave')   status = 'On Leave';
+            else if(r.status === 'Missing')    status = 'Absent';
+            else if(r.status === 'Incomplete') status = 'Incomplete';
+            else if(r.status === 'Complete')   status = 'Present';
+
+            const cleanLogin  = (r.login  === '❌ No login'  || !r.login)  ? '' : r.login;
+            const cleanLogout = (r.logout === '❌ No logout' || !r.logout) ? '' : r.logout;
+
+            const row = {
+                date:   dateStr,
+                name:   r.name,
+                team:   r.team,
+                status: status,
+                login:  cleanLogin,
+                logout: cleanLogout,
+                notes:  ''
+            };
+            await dbSaveAttendance(row);
+        }
+    } catch(e){
+        console.error('saveAttendanceFromReport error:', e);
+    }
+}
+
 async function processMessages(){
     const input=document.getElementById('slackInput').value.trim();
     if(!input){alert('Please paste some Slack messages first!');return;}
@@ -1759,11 +1801,31 @@ async function processMessages(){
     document.getElementById('viewTabs').style.display='flex';
     document.getElementById('resultsArea').style.display='block';
     renderView(activeViewTab);
-    await saveViolationsForDate(dateStr,lastReport);
+    // Save violations to violation_history table
+    await saveViolationsForDate(dateStr, lastReport);
+
+    // Save full attendance (all employees) to attendance_records table
+    setSyncStatus('loading', 'Saving attendance records…');
+    await saveAttendanceFromReport(dateStr, lastReport);
+
+    // Refresh attendance panel — reload from DB and auto-select this date
+    await refreshAttendDateSelect();
+    const attendSel = document.getElementById('attendDateSelect');
+    attendSel.value = dateStr;
+    await loadAttendance();
+
+    // Open attendance panel automatically
+    const ap = document.getElementById('attendPanelToggle');
+    const ab = document.getElementById('attendPanelBody');
+    if(!ab.classList.contains('open')){ ap.classList.add('open'); ab.classList.add('open'); }
+
+    // Open violation history panel
     const hp=document.getElementById('histPanelToggle'),hb=document.getElementById('histPanelBody');
     if(!hb.classList.contains('open')){hp.classList.add('open');hb.classList.add('open');}
+
     const vc=lastReport.filter(r=>r.status==='Missing'||r.status==='Incomplete').length;
-    showToast(vc?`✅ Saved to cloud. <strong>${vc} violation${vc!==1?'s':''}</strong> recorded.`:`✅ Saved — everyone compliant!`);
+    setSyncStatus('ok', '✅ Attendance & violations saved for ' + formatDate(dateStr));
+    showToast(vc?`✅ Saved. <strong>${vc} violation${vc!==1?'s':''}</strong> recorded for ${formatDate(dateStr)}.`:`✅ Saved — everyone compliant on ${formatDate(dateStr)}!`);
     document.getElementById('lastUpdated').textContent=`✓ Last updated: ${new Date().toLocaleString()}`;
 }
 
@@ -1838,7 +1900,17 @@ async function initApp(){
     document.getElementById('clearOverlayConfirm').addEventListener('click',async()=>{
         document.getElementById('clearOverlay').classList.remove('open');
         setSyncStatus('loading','Deleting all records…');
-        try{ await dbDeleteAll(); await loadFromCloud(); showToast('🗑️ All history cleared.'); }
+        try{
+            await dbDeleteAll();
+            // Also clear all attendance records
+            const allAttend = await sbFetch(ATTEND_TABLE + '?date=gte.0000-00-00');
+            for(const r of allAttend){ try{ await dbDeleteAttendance(r.id); } catch(e){} }
+            await loadFromCloud();
+            await refreshAttendDateSelect();
+            document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
+            document.getElementById('attendSummary').innerHTML='';
+            showToast('🗑️ All history cleared.');
+        }
         catch(e){ setSyncStatus('error','Delete failed: '+e.message); }
     });
     document.getElementById('clearOverlay').addEventListener('click',e=>{
