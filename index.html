@@ -199,9 +199,24 @@
         .modal-clear-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
 
         /* attendance panel */
-        .attend-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+        .attend-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
         .attend-toolbar select{padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;min-width:200px;}
         .attend-toolbar select:focus{outline:none;border-color:#1a4d8c;}
+        /* searchable employee filter */
+        .emp-search-wrap{position:relative;min-width:220px;}
+        .emp-search-wrap input{width:100%;padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;box-sizing:border-box;}
+        .emp-search-wrap input:focus{outline:none;border-color:#1a4d8c;}
+        .emp-search-dropdown{position:absolute;top:100%;left:0;right:0;background:white;border:2px solid #1a4d8c;border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;z-index:500;display:none;}
+        .emp-search-dropdown.open{display:block;}
+        .emp-search-opt{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0;}
+        .emp-search-opt:hover,.emp-search-opt.highlighted{background:#e8f0fe;color:#1a4d8c;}
+        .emp-search-opt.selected{font-weight:700;color:#1a4d8c;}
+        /* date range row */
+        .attend-range-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;}
+        .attend-range-row label{font-size:13px;font-weight:600;color:#555;}
+        .attend-range-row input[type=date]{padding:7px 10px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;}
+        .attend-range-row input[type=date]:focus{outline:none;border-color:#1a4d8c;}
+        .attend-range-active{background:#e8f0fe;border-color:#1a4d8c;}
         .attend-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px;}
         .attend-stat{background:#f8f9fa;border:1px solid #eee;border-radius:8px;padding:12px;text-align:center;}
         .attend-stat .av{font-size:22px;font-weight:bold;}
@@ -304,7 +319,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.8</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v7.9</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -440,13 +455,24 @@
                 <select id="attendDateSelect" onchange="loadAttendance()">
                     <option value="">— Pick a date —</option>
                 </select>
-                <label style="font-size:13px;font-weight:600;color:#555;">Filter Employee:</label>
-                <select id="attendEmpFilter" onchange="renderAttendanceFiltered()">
-                    <option value="">All Employees</option>
-                </select>
+                <label style="font-size:13px;font-weight:600;color:#555;">Employee:</label>
+                <div class="emp-search-wrap" id="empSearchWrap">
+                    <input type="text" id="empSearchInput" placeholder="Search or select employee…" autocomplete="off" oninput="onEmpSearchInput()" onfocus="openEmpDropdown()" onkeydown="onEmpSearchKey(event)"/>
+                    <div class="emp-search-dropdown" id="empSearchDropdown"></div>
+                </div>
                 <button class="btn btn-success btn-sm" id="attendAddBtn" onclick="openAttendanceModal()" disabled>➕ Add / Edit Entry</button>
                 <button class="btn btn-secondary btn-sm" id="attendExportBtn" onclick="exportAttendanceCSV()" disabled>📥 Export CSV</button>
                 <button class="btn btn-danger btn-sm"   id="attendDeleteDateBtn" onclick="deleteAttendanceByDate()" disabled>🗑️ Delete Date</button>
+            </div>
+            <!-- Date range row — shown only when an employee is selected -->
+            <div class="attend-range-row" id="attendRangeRow" style="display:none;">
+                <label>📅 Date Range:</label>
+                <label style="font-weight:400;">From</label>
+                <input type="date" id="empRangeFrom" onchange="applyEmpDateRange()"/>
+                <label style="font-weight:400;">To</label>
+                <input type="date" id="empRangeTo" onchange="applyEmpDateRange()"/>
+                <button class="btn btn-secondary btn-sm" onclick="clearEmpDateRange()">✖ Clear Range</button>
+                <span id="empRangeLabel" style="font-size:12px;color:#888;"></span>
             </div>
             <div class="attend-summary" id="attendSummary"></div>
             <div class="attend-table-wrap">
@@ -1699,7 +1725,7 @@ async function loadAttendance(){
     try{
         // Only load manual overrides — auto attendance is derived from dbRows in memory
         attendRows = await dbLoadAttendance(dateStr);
-        populateAttendEmpFilter();
+        populateAttendEmpFilter(); // refresh employee list
         renderAttendance(dateStr);
     } catch(e){
         attendRows = [];
@@ -1707,17 +1733,108 @@ async function loadAttendance(){
     }
 }
 
+// ── Searchable employee filter ──
+let _empSearchSelected = ''; // currently selected employee name
+let _empSearchHighlight = -1;
+let _empSearchAll = [];
+
 function populateAttendEmpFilter(){
-    const sel = document.getElementById('attendEmpFilter');
-    const prev = sel.value;
-    const allEmp = [...teams.annotation.map(n=>n), ...teams.assessment.map(n=>n)].sort();
-    sel.innerHTML = '<option value="">All Employees</option>' +
-        allEmp.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    if(prev) sel.value = prev;
+    _empSearchAll = [...teams.annotation.map(n=>n), ...teams.assessment.map(n=>n)].sort();
+    // Keep previous selection if still valid
+    if(_empSearchSelected && !_empSearchAll.includes(_empSearchSelected)){
+        _empSearchSelected = '';
+        document.getElementById('empSearchInput').value = '';
+    }
 }
 
+function getEmpFilter(){ return _empSearchSelected; }
+
+function onEmpSearchInput(){
+    _empSearchHighlight = -1;
+    renderEmpDropdown();
+    openEmpDropdown();
+}
+
+function openEmpDropdown(){
+    renderEmpDropdown();
+    document.getElementById('empSearchDropdown').classList.add('open');
+}
+
+function closeEmpDropdown(){
+    document.getElementById('empSearchDropdown').classList.remove('open');
+}
+
+function renderEmpDropdown(){
+    const q = document.getElementById('empSearchInput').value.trim().toLowerCase();
+    const filtered = q ? _empSearchAll.filter(n=>n.toLowerCase().includes(q)) : _empSearchAll;
+    const dd = document.getElementById('empSearchDropdown');
+    if(!filtered.length){ dd.innerHTML='<div class="emp-search-opt" style="color:#aaa;">No match</div>'; return; }
+    dd.innerHTML = (q ? '' : '<div class="emp-search-opt" data-val="" style="color:#888;">All Employees</div>') +
+        filtered.map((n,i)=>`<div class="emp-search-opt${n===_empSearchSelected?' selected':''}" data-val="${esc(n)}" data-idx="${i}">${esc(n)}</div>`).join('');
+    dd.querySelectorAll('.emp-search-opt').forEach(el=>{
+        el.addEventListener('mousedown', e=>{ e.preventDefault(); selectEmpFilter(el.dataset.val); });
+    });
+}
+
+function selectEmpFilter(name){
+    _empSearchSelected = name;
+    _empSearchHighlight = -1;
+    document.getElementById('empSearchInput').value = name;
+    closeEmpDropdown();
+    // Show/hide date range row
+    const rangeRow = document.getElementById('attendRangeRow');
+    rangeRow.style.display = name ? 'flex' : 'none';
+    if(!name){ clearEmpDateRange(false); }
+    renderAttendanceFiltered();
+}
+
+function onEmpSearchKey(e){
+    const dd = document.getElementById('empSearchDropdown');
+    const opts = dd.querySelectorAll('.emp-search-opt[data-val]');
+    if(e.key==='ArrowDown'){ e.preventDefault(); _empSearchHighlight=Math.min(_empSearchHighlight+1,opts.length-1); highlightEmpOpt(opts); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); _empSearchHighlight=Math.max(_empSearchHighlight-1,0); highlightEmpOpt(opts); }
+    else if(e.key==='Enter'){ e.preventDefault(); if(_empSearchHighlight>=0&&opts[_empSearchHighlight]) selectEmpFilter(opts[_empSearchHighlight].dataset.val); }
+    else if(e.key==='Escape'){ closeEmpDropdown(); }
+}
+
+function highlightEmpOpt(opts){
+    opts.forEach((o,i)=>o.classList.toggle('highlighted',i===_empSearchHighlight));
+    if(opts[_empSearchHighlight]) opts[_empSearchHighlight].scrollIntoView({block:'nearest'});
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e=>{
+    if(!document.getElementById('empSearchWrap')?.contains(e.target)) closeEmpDropdown();
+});
+
 function renderAttendanceFiltered(){
-    if(attendCurrentDate) renderAttendance(attendCurrentDate);
+    const empName = getEmpFilter();
+    if(empName){
+        const from = document.getElementById('empRangeFrom').value;
+        const to   = document.getElementById('empRangeTo').value;
+        renderEmployeeHistory(empName, from, to);
+    } else if(attendCurrentDate){
+        renderAttendance(attendCurrentDate);
+    }
+}
+
+// ── Date range helpers ──
+function applyEmpDateRange(){
+    const from = document.getElementById('empRangeFrom').value;
+    const to   = document.getElementById('empRangeTo').value;
+    const row  = document.getElementById('attendRangeRow');
+    row.classList.toggle('attend-range-active', !!(from||to));
+    const label = document.getElementById('empRangeLabel');
+    label.textContent = (from&&to) ? formatDate(from)+' → '+formatDate(to) : (from?'From '+formatDate(from):'') || (to?'Until '+formatDate(to):'');
+    renderAttendanceFiltered();
+}
+
+function clearEmpDateRange(rerender=true){
+    document.getElementById('empRangeFrom').value='';
+    document.getElementById('empRangeTo').value='';
+    document.getElementById('attendRangeRow').classList.remove('attend-range-active');
+    document.getElementById('empRangeLabel').textContent='';
+    if(rerender) renderAttendanceFiltered();
 }
 
 function calcWorkingHours(login, logout){
@@ -1729,10 +1846,11 @@ function calcWorkingHours(login, logout){
 }
 
 // Show all attendance records across all dates for a single employee
-async function renderEmployeeHistory(empName){
+async function renderEmployeeHistory(empName, fromDate='', toDate=''){
     const content = document.getElementById('attendContent');
     const badge   = document.getElementById('attendBadge');
-    badge.textContent = esc(empName) + ' — All Dates';
+    const rangeLabel = (fromDate||toDate) ? (' · '+(fromDate?formatDate(fromDate):'…')+' → '+(toDate?formatDate(toDate):'…')) : ' — All Dates';
+    badge.textContent = esc(empName) + rangeLabel;
     content.innerHTML = '<div class="no-attend">Loading history…</div>';
 
     try{
@@ -1742,8 +1860,10 @@ async function renderEmployeeHistory(empName){
         // All employee records now stored in dbRows (violation_history table)
         const empDbRows = dbRows.filter(r=>r.name===empName);
 
-        // All dates = union of both sources
-        const allDates = [...new Set([...manualRows.map(r=>r.date), ...empDbRows.map(r=>r.date)])].sort().reverse();
+        // All dates = union of both sources, filtered by range if set
+        let allDates = [...new Set([...manualRows.map(r=>r.date), ...empDbRows.map(r=>r.date)])].sort().reverse();
+        if(fromDate) allDates = allDates.filter(d=>d>=fromDate);
+        if(toDate)   allDates = allDates.filter(d=>d<=toDate);
 
         if(!allDates.length){
             content.innerHTML = '<div class="no-attend">No records found for <strong>' + esc(empName) + '</strong>. Process their Slack messages first.</div>';
@@ -1825,18 +1945,19 @@ async function renderEmployeeHistory(empName){
 
 function renderAttendance(dateStr){
     window._attendRowMap = {}; // clear map on each render
-    const empFilter = document.getElementById('attendEmpFilter') ? document.getElementById('attendEmpFilter').value : '';
-    let allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
-                  ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
-    if(empFilter) allEmp = allEmp.filter(e=>e.name===empFilter);
+    const empFilter = getEmpFilter();
     const content = document.getElementById('attendContent');
     const badge   = document.getElementById('attendBadge');
 
-    // If filtering by employee, show their full history across all dates
+    // If filtering by employee, show their full history
     if(empFilter){
-        renderEmployeeHistory(empFilter);
+        const from = document.getElementById('empRangeFrom').value;
+        const to   = document.getElementById('empRangeTo').value;
+        renderEmployeeHistory(empFilter, from, to);
         return;
     }
+    let allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
+                  ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
 
     // Build merged list priority: manual override > lastReport (current date) > dbRows (past dates) > Unknown
     const isCurrentDate = (lastReport.length > 0 && dateStr === (document.getElementById('reportDate').value || new Date().toISOString().split('T')[0]));
@@ -2051,20 +2172,34 @@ async function deleteAttendEntry(id){
 async function deleteAttendanceByDate(){
     const dateStr = attendCurrentDate;
     if(!dateStr){ showToast('No date selected.'); return; }
-    const manualCount = attendRows.filter(r=>r.source==='manual').length;
+    const totalCount = dbRows.filter(r=>r.date===dateStr).length;
     openConfirm(
-        'Delete Manual Overrides',
-        'This will delete <strong>'+manualCount+' manual override'+(manualCount!==1?'s':'')+
-        '</strong> for <strong>'+formatDateWithDay(dateStr)+'</strong>.<br>Auto-detected attendance from Slack will still be visible.',
+        '🗑️ Delete All Data for ' + formatDate(dateStr),
+        'This will permanently delete <strong>all '+totalCount+' records</strong> (attendance + violations) for <strong>'+formatDateWithDay(dateStr)+'</strong>.<br><br>This cannot be undone.',
         async ()=>{
-            setSyncStatus('loading','Deleting manual overrides…');
+            setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
             try{
-                const manuals = attendRows.filter(r=>r.source==='manual');
-                await Promise.all(manuals.map(r=>dbDeleteAttendance(r.id)));
-                attendRows = attendRows.filter(r=>r.source!=='manual');
-                renderAttendance(dateStr);
-                showToast('🗑️ Manual overrides deleted for '+formatDate(dateStr)+'.');
-                setSyncStatus('ok','✅ Done.');
+                // Delete from both tables in parallel
+                await Promise.all([
+                    sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}),
+                    sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}).catch(()=>{})
+                ]);
+                // Remove from local cache
+                dbRows = dbRows.filter(r=>r.date!==dateStr);
+                attendRows = [];
+                attendCurrentDate = '';
+                // Reset UI
+                document.getElementById('attendDateSelect').value = '';
+                document.getElementById('attendContent').innerHTML = '<div class="no-attend">Select a date above to view attendance.</div>';
+                document.getElementById('attendSummary').innerHTML = '';
+                document.getElementById('attendAddBtn').disabled = true;
+                document.getElementById('attendExportBtn').disabled = true;
+                document.getElementById('attendDeleteDateBtn').disabled = true;
+                renderHistory(getHistFilters());
+                renderDateManager();
+                refreshAttendDateSelect();
+                showToast('🗑️ All data for '+formatDate(dateStr)+' deleted.');
+                setSyncStatus('ok','✅ Deleted.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
             }
@@ -2257,6 +2392,8 @@ async function initApp(){
     document.getElementById('attendLogin') .addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendLogout').addEventListener('blur', recalcStatusFromTimes);
     document.getElementById('attendCloseBtn').addEventListener('click', closeAttendanceModal);
+    // Populate searchable employee filter after teams are loaded
+    populateAttendEmpFilter();
     document.getElementById('attendOverlay').addEventListener('click', e=>{ if(e.target===document.getElementById('attendOverlay')) closeAttendanceModal(); });
     document.getElementById('attendSaveBtn').addEventListener('click', saveManualEntry);
     document.getElementById('attendPanelToggle').addEventListener('click',()=>{
