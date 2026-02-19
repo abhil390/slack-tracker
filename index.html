@@ -335,7 +335,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.2</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.3</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -728,23 +728,25 @@ const ATTEND_TABLE = 'attendance_records';
 // ══════════════════════════════════════════════════════════════
 async function sbFetch(path, opts={}){
     const url = SUPABASE_URL + '/rest/v1/' + path;
-    // Build headers — Prefer must be set explicitly per call
+    const method = opts.method || 'GET';
     const headers = {
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SUPABASE_KEY,
         'Content-Type': 'application/json',
     };
-    if(opts.prefer) headers['Prefer'] = opts.prefer;
-    if(opts.headers) Object.assign(headers, opts.headers);
+    // Supabase requires Prefer: return=minimal for write operations to avoid errors
+    if(method !== 'GET') headers['Prefer'] = opts.prefer || 'return=minimal';
+    if(opts.prefer)      headers['Prefer'] = opts.prefer; // explicit override
+    if(opts.headers)     Object.assign(headers, opts.headers);
 
     const res = await fetch(url, {
-        method: opts.method || 'GET',
+        method,
         headers,
         body: opts.body || undefined
     });
     if(!res.ok){
         const err = await res.text();
-        throw new Error(`Supabase error ${res.status}: ${err}`);
+        throw new Error(`Supabase ${method} error ${res.status}: ${err}`);
     }
     const text = await res.text();
     return text ? JSON.parse(text) : [];
@@ -822,14 +824,16 @@ async function dbUpsertByDateName(row){
 }
 
 async function dbDeleteAll(){
-    return sbFetch(TABLE + '?date=gte.0000-00-00', {
-        method: 'DELETE'
+    return sbFetch(TABLE + '?id=neq.00000000-0000-0000-0000-000000000000', {
+        method: 'DELETE',
+        prefer: 'return=minimal'
     });
 }
 
 async function dbDeleteByDate(dateStr){
     return sbFetch(TABLE + '?date=eq.' + encodeURIComponent(dateStr), {
-        method: 'DELETE'
+        method: 'DELETE',
+        prefer: 'return=minimal'
     });
 }
 
@@ -1156,11 +1160,13 @@ function deleteSelectedDate(){
         async ()=>{
             setSyncStatus('loading','Deleting records for '+formatDate(dateStr)+'…');
             try{
-                // Delete violation_history and attendance_records for this date in parallel
-                await Promise.all([
-                    dbDeleteByDate(dateStr),
-                    sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}).catch(()=>{})
-                ]);
+                // Delete violation_history and attendance_records for this date
+                await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
+                    method:'DELETE', prefer:'return=minimal'
+                });
+                await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
+                    method:'DELETE', prefer:'return=minimal'
+                }).catch(()=>{});
                 // Remove from local cache
                 dbRows = dbRows.filter(r=>r.date!==dateStr);
                 attendRows = attendRows.filter(r=>r.date!==dateStr);
@@ -1172,6 +1178,7 @@ function deleteSelectedDate(){
                 setSyncStatus('ok','✅ Date deleted.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
+                showToast('❌ Delete failed: '+e.message);
             }
         }
     );
@@ -2205,29 +2212,38 @@ async function deleteAttendanceByDate(){
         async ()=>{
             setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
             try{
-                // Delete from both tables in parallel
-                await Promise.all([
-                    sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}),
-                    sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}).catch(()=>{})
-                ]);
-                // Remove from local cache
+                // Delete from violation_history (no .catch — we want to know if it fails)
+                await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
+                    method:'DELETE', prefer:'return=minimal'
+                });
+                // Delete from attendance_records (best-effort)
+                await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {
+                    method:'DELETE', prefer:'return=minimal'
+                }).catch(()=>{});
+
+                // Update local cache
                 dbRows = dbRows.filter(r=>r.date!==dateStr);
                 attendRows = [];
                 attendCurrentDate = '';
-                // Reset UI
+
+                // Reset attendance UI
                 document.getElementById('attendDateSelect').value = '';
                 document.getElementById('attendContent').innerHTML = '<div class="no-attend">Select a date above to view attendance.</div>';
                 document.getElementById('attendSummary').innerHTML = '';
                 document.getElementById('attendAddBtn').disabled = true;
                 document.getElementById('attendExportBtn').disabled = true;
                 document.getElementById('attendDeleteDateBtn').disabled = true;
+
+                // Re-render everything from updated cache
                 renderHistory(getHistFilters());
                 renderDateManager();
                 refreshAttendDateSelect();
+
                 showToast('🗑️ All data for '+formatDate(dateStr)+' deleted.');
-                setSyncStatus('ok','✅ Deleted.');
+                setSyncStatus('ok','✅ Deleted. If data reappears, click 🔄 Refresh.');
             } catch(e){
                 setSyncStatus('error','❌ Delete failed: '+e.message);
+                showToast('❌ Delete failed: '+e.message);
             }
         }
     );
