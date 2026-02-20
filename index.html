@@ -513,7 +513,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.6</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.7</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -675,8 +675,8 @@
                             <option value="assessment">Assessment</option>
                         </select>
                         <select id="empHistType">
+                            <option value="violation" selected>Violations Only</option>
                             <option value="all">All Records</option>
-                            <option value="violation">Violations Only</option>
                             <option value="On Leave">On Leave</option>
                             <option value="Ignored">Ignored</option>
                             <option value="present">Present</option>
@@ -1350,19 +1350,43 @@ async function saveResolutionToCloud(date, name, resolution, reason){
         dbRows[idx].reason      = reason;
         dbRows[idx].resolved_at = resolvedAt;
 
+        // IMPORTANT: Clear lastReport so renderAttendance reads from dbRows (updated cache)
+        // not from stale in-memory lastReport which has the old pre-resolution status.
+        lastReport = [];
+
         // STEP 3: Switch filter to Active Violations Only so resolved records hide
         const histTypeEl = document.getElementById('histTypeFilter');
         if(resolution !== 'violation' && histTypeEl){
             histTypeEl.value = 'active';
         }
 
-        // STEP 4: Re-render violation history from updated cache
-        renderHistory(getHistFilters());
+        // STEP 4: Re-render whichever tab is active from updated cache
+        if(_activeHistTab==='today'){
+            renderHistory(getHistFilters());
+        } else {
+            renderEmpHistory();
+        }
         updateHistBadge();
 
-        // STEP 5: Re-render attendance panel immediately from updated cache
-        // This is what actually shows the correct status in Daily Attendance Tracker
-        if(attendCurrentDate){
+        // STEP 5: Re-render attendance panel immediately from updated cache.
+        // Use the edited record's date (not attendCurrentDate which may be empty).
+        // Also force isCurrentDate=false so it reads from dbRows (not stale lastReport).
+        const editedDate = date;
+        if(attendCurrentDate && attendCurrentDate === editedDate){
+            // Attendance panel is already showing this date — refresh it
+            renderAttendance(editedDate);
+        } else if(!attendCurrentDate){
+            // Attendance panel not open — set it up for the edited date
+            attendCurrentDate = editedDate;
+            refreshAttendDateSelect();
+            const sel = document.getElementById('attendDateSelect');
+            if(sel) sel.value = editedDate;
+            dbLoadAttendance(editedDate).then(rows=>{
+                attendRows = rows;
+                renderAttendance(editedDate);
+            }).catch(()=>{ attendRows=[]; renderAttendance(editedDate); });
+        } else {
+            // Different date selected — still refresh whatever is open
             renderAttendance(attendCurrentDate);
         }
 
@@ -2944,6 +2968,9 @@ function switchHistTab(tab){
     if(tab==='today'){
         updateTodayViolTabLabel();
         renderHistory(getHistFilters());
+    } else if(tab==='all'){
+        // Auto-load: show all employees that have violations, collapsed
+        renderEmpHistory();
     }
 }
 
