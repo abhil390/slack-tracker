@@ -221,9 +221,10 @@
         .attend-stat{background:#f8f9fa;border:1px solid #eee;border-radius:8px;padding:12px;text-align:center;}
         .attend-stat .av{font-size:22px;font-weight:bold;}
         .attend-stat .al{font-size:11px;text-transform:uppercase;color:#999;margin-top:4px;}
-        .attend-table-wrap{overflow:auto;border-radius:8px;border:1px solid #e0e0e0;}
+        .attend-table-wrap{overflow:auto;border-radius:8px;border:1px solid #e0e0e0;max-height:520px;}
         .attend-table{width:100%;border-collapse:collapse;}
-        .attend-table th{background:#f0f2f5;font-size:12px;padding:10px 14px;text-align:left;font-weight:600;color:#555;border-bottom:1px solid #dee2e6;white-space:nowrap;}
+        .attend-table thead{position:sticky;top:0;z-index:10;}
+        .attend-table th{background:#f0f2f5;font-size:12px;padding:10px 14px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #dee2e6;white-space:nowrap;}
         .attend-table td{padding:9px 14px;border-bottom:1px solid #f0f2f5;font-size:13px;vertical-align:middle;}
         .attend-table tr:last-child td{border-bottom:none;}
         .attend-table tr:hover td{background:#fafafa;}
@@ -262,6 +263,137 @@
         .attend-field input:focus,.attend-field select:focus{outline:none;border-color:#27ae60;}
         .attend-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
         .modal-attend-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
+
+
+
+        /* ── Dashboard ── */
+        #dashPanel{background:white;border:1px solid #e0e0e0;border-radius:12px;padding:20px;margin-bottom:20px;}
+        .dash-title{font-size:14px;font-weight:700;color:#2c3e50;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+        .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px;}
+        .dash-card{background:#f8f9fa;border:1px solid #eee;border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;}
+        .dash-card-val{font-size:28px;font-weight:800;line-height:1;}
+        .dash-card-title{font-size:11px;text-transform:uppercase;color:#888;margin-top:4px;letter-spacing:.4px;}
+        .dash-card-sub{font-size:11px;color:#aaa;margin-top:2px;}
+        .dash-card-icon{position:absolute;right:12px;top:12px;font-size:24px;opacity:.15;}
+        .dash-trend-title{font-size:12px;font-weight:700;color:#555;margin-bottom:8px;}
+        .dash-trend-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+        .dash-trend-label{font-size:11px;color:#888;min-width:70px;}
+        .dash-trend-bar-bg{flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;}
+        .dash-trend-bar{height:8px;border-radius:4px;transition:width .5s ease;}
+        .dash-trend-pct{font-size:11px;font-weight:700;min-width:36px;text-align:right;}
+        .dash-teams{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+        .dash-team-card{background:#f8f9fa;border:1px solid #eee;border-radius:10px;padding:12px 14px;}
+        .dash-team-name{font-size:12px;font-weight:700;color:#555;margin-bottom:8px;}
+        .dash-team-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0;border-bottom:1px solid #f0f0f0;}
+        .dash-team-row:last-child{border-bottom:none;}
+        .dash-empty{color:#bbb;font-size:13px;text-align:center;padding:16px;}
+
+
+        /* ── Monthly Summary ── */
+        .monthly-cal-wrap{overflow-x:auto;border:1px solid #e0e0e0;border-radius:10px;}
+        .monthly-cal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8f9fa;border-bottom:1px solid #e0e0e0;}
+        .monthly-cal-title{font-size:15px;font-weight:700;color:#2c3e50;}
+        .monthly-cal-table{border-collapse:collapse;width:100%;min-width:900px;font-size:11px;}
+        .monthly-cal-table th{padding:6px 4px;text-align:center;font-weight:600;color:#888;border-right:1px solid #f0f0f0;white-space:nowrap;}
+        .monthly-cal-emp{padding:6px 10px;font-weight:600;color:#2c3e50;white-space:nowrap;background:#fafafa;border-right:1px solid #e0e0e0;font-size:12px;min-width:140px;}
+        .monthly-cal-day-head{background:#f0f2f5;border-right:1px solid #e0e0e0;border-bottom:2px solid #ddd;}
+        .mc-cell{width:32px;height:32px;text-align:center;vertical-align:middle;border-right:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0;cursor:default;}
+        .mc-cell span{display:inline-flex;width:24px;height:24px;border-radius:6px;align-items:center;justify-content:center;font-size:10px;font-weight:700;}
+        .mc-full{background:#d4edda;color:#155724;}
+        .mc-half{background:#fde8c8;color:#7a3c00;}
+        .mc-incomplete{background:#fff3cd;color:#856404;}
+        .mc-absent{background:#f8d7da;color:#721c24;}
+        .mc-leave{background:#e2e3e5;color:#383d41;}
+        .mc-empty{color:#ddd;}
+        .mc-future{background:#fafafa;color:#ddd;}
+        .monthly-legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 16px;font-size:11px;border-top:1px solid #eee;}
+        .mc-leg{display:flex;align-items:center;gap:4px;}
+        .mc-leg span{width:14px;height:14px;border-radius:3px;display:inline-block;}
+        .monthly-nav-btn{background:none;border:1px solid #ddd;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;}
+        .monthly-nav-btn:hover{background:#f0f0f0;}
+
+        /* ── Dark Mode ── */
+        body.dark{background:#0f1117;}
+        body.dark .container{background:#1a1d27;}
+        body.dark .header{background:linear-gradient(135deg,#0d1b35,#1a2744);}
+        body.dark .panel{background:#1e2130;border-color:#2a2d3e;}
+        body.dark .panel-header{background:#252839;border-color:#2a2d3e;}
+        body.dark .panel-header h2{color:#e0e6f0;}
+        body.dark .panel-body{background:#1e2130;}
+        body.dark .input-section{background:#1e2130;border-color:#2a2d3e;}
+        body.dark #slackInput{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark #slackInput:focus{border-color:#4a90d9;}
+        body.dark .sync-bar{background:#252839;border-color:#2a2d3e;color:#b0b8cc;}
+        body.dark .sync-bar.error{background:#2d1b1b;border-color:#c0392b;}
+        body.dark .sync-bar.loading{background:#1b2535;border-color:#2980b9;}
+        body.dark .attend-toolbar select{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .emp-search-wrap input{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .emp-search-dropdown{background:#252839;border-color:#4a90d9;}
+        body.dark .emp-search-opt{border-color:#2a2d3e;color:#c0c8dc;}
+        body.dark .emp-search-opt:hover,.dark .emp-search-opt.highlighted{background:#1a2744;color:#7fb3f5;}
+        body.dark .attend-table-wrap{border-color:#2a2d3e;}
+        body.dark .attend-table th{background:#252839;color:#9aa8c0;border-color:#2a2d3e;}
+        body.dark .attend-table td{border-color:#252839;color:#c8d0e0;}
+        body.dark .attend-table tr:hover td{background:#252839;}
+        body.dark .attend-stat{background:#252839;border-color:#2a2d3e;}
+        body.dark .attend-stat .al{color:#6a7898;}
+        body.dark .history-toolbar{background:#252839;border-color:#2a2d3e;}
+        body.dark .history-toolbar select,.dark .history-toolbar input{background:#1e2130;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .date-manager{background:#1b2535;border-color:#2a3a55;}
+        body.dark .date-manager h4{color:#8a9ab8;}
+        body.dark .date-manager-row select{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .hist-row{border-color:#2a2d3e;}
+        body.dark .hist-row:hover{background:#252839;}
+        body.dark .date-row label{color:#8a9ab8;}
+        body.dark #reportDate{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .attend-range-row{background:#252839;border-color:#2a2d3e;}
+        body.dark .attend-range-row label{color:#8a9ab8;}
+        body.dark .attend-range-row input[type=date]{background:#1e2130;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .no-attend{color:#555a6e;}
+        body.dark .emp-grid{background:#1e2130;}
+        body.dark .emp-chip{background:#252839;border-color:#3a3d4e;color:#c0c8dc;}
+        body.dark .emp-chip:hover{background:#2a2d3e;}
+        body.dark .add-emp-row input,.dark .add-emp-row select{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .panel-footer{background:#252839;border-color:#2a2d3e;color:#6a7898;}
+        body.dark .modal-confirm,.dark .modal-edit,.dark .modal-clear,.dark .modal-attend,.dark .modal-master-delete,.dark .modal-dateconfirm{background:#1e2130;}
+        body.dark .modal-confirm h3{color:#e0e6f0;}
+        body.dark .modal-confirm p,.dark .modal-clear-body p{color:#8a9ab8;}
+        body.dark .modal-clear-body input,.dark .modal-attend-body input,.dark .modal-attend-body select,.dark .modal-master-delete-body input,.dark .modal-dateconfirm-body input{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .modal-clear-footer,.dark .modal-attend-footer,.dark .modal-master-delete-footer,.dark .modal-dateconfirm-footer{border-color:#2a2d3e;}
+        body.dark .viol-info-box{background:#252839;border-color:#2a2d3e;}
+        body.dark .viol-info-box .vi-row{color:#8a9ab8;}
+        body.dark .viol-info-box .vi-row strong{color:#c0c8dc;}
+        body.dark .res-option{background:#252839;border-color:#3a3d4e;color:#c0c8dc;}
+        body.dark .res-option:hover{background:#1a2744;border-color:#4a90d9;}
+        body.dark .reason-field label{color:#8a9ab8;}
+        body.dark .reason-field textarea{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .mdd-cal-wrap{background:#252839;border-color:#2a2d3e;}
+        body.dark .mdd-cal-title{color:#c0c8dc;}
+        body.dark .mdd-cal-arr{background:#1e2130;border-color:#3a3d4e;color:#8a9ab8;}
+        body.dark .mdd-cal-grid-head span{color:#555a6e;}
+        body.dark .mdd-cal-day{color:#3a3d4e;}
+        body.dark .mdd-date-box{background:#2d1b1b;border-color:#5a2222;}
+        body.dark .mdd-what{background:#252839;}
+        body.dark .mdd-what-item{color:#8a9ab8;border-color:#2a2d3e;}
+        body.dark .modal-dateconfirm-body .date-display{background:#1b2535;border-color:#2980b9;}
+        body.dark .modal-dateconfirm-body p,.dark .mdd-instruction{color:#8a9ab8;}
+        body.dark .history-summary{background:#252839;border-color:#2a2d3e;}
+        body.dark .attend-stat{background:#252839;border-color:#2a2d3e;}
+        body.dark #dashPanel{background:#1e2130;border-color:#2a2d3e;}
+        body.dark .dash-card{background:#252839;border-color:#2a2d3e;}
+        body.dark .dash-card-title{color:#6a7898;}
+        body.dark .dash-trend-bar-bg{background:#2a2d3e;}
+        body.dark .dash-team-row{border-color:#2a2d3e;}
+        body.dark .dash-team-name{color:#8a9ab8;}
+        body.dark .monthly-cal-wrap{background:#1e2130;}
+        body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
+        body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
+        body.dark .monthly-cal-day-head{color:#555a6e;border-color:#2a2d3e;}
+        body.dark .mc-cell{border-color:#2a2d3e;}
+
+        /* Dark mode toggle button */
+        #darkModeBtn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:white;font-size:16px;padding:5px 10px;border-radius:8px;cursor:pointer;transition:background .2s;line-height:1;}
+        #darkModeBtn:hover{background:rgba(255,255,255,.2);}
 
         .debug-info{background:#f8f9fa;padding:10px;margin:10px 0;border-radius:5px;font-size:12px;color:#666;max-height:200px;overflow:auto;display:none;border:1px solid #dee2e6;font-family:monospace;}
         .footer{text-align:center;margin-top:20px;color:#666;font-size:13px;}
@@ -379,12 +511,13 @@
 
     <div class="header">
         <div class="top-user-bar">
+            <button id="darkModeBtn" onclick="toggleDarkMode()" title="Toggle dark mode">🌙</button>
             <button class="btn btn-danger" id="masterDeleteBtn" onclick="openMasterDelete()" title="Delete all records for a specific date">🗑️ Delete Day Data</button>
             <span style="color:rgba(255,255,255,.7);font-size:13px;">Logged in as:</span>
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v8.9</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.0</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -392,6 +525,47 @@
     <div class="sync-bar loading" id="syncBar">
         <div class="sync-dot loading" id="syncDot"></div>
         <span id="syncMsg">Connecting to shared database…</span>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashPanel" style="display:none;">
+        <div class="dash-title">📊 Attendance Dashboard <span id="dashDateLabel" style="font-size:12px;color:#aaa;font-weight:400;"></span></div>
+        <div class="dash-grid" id="dashGrid"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div>
+                <div class="dash-trend-title">📅 Last 7 Days Trend</div>
+                <div id="dashTrend"></div>
+            </div>
+            <div>
+                <div class="dash-trend-title">👥 Team Comparison</div>
+                <div class="dash-teams" id="dashTeams"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Summary -->
+    <div class="panel" id="monthlyPanel" style="margin-bottom:0;display:none;">
+        <div class="panel-header" id="monthlyPanelToggle">
+            <h2>📅 Monthly Attendance Summary</h2>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body" id="monthlyPanelBody">
+            <div class="monthly-cal-wrap">
+                <div class="monthly-cal-head">
+                    <button class="monthly-nav-btn" onclick="monthlyCalMove(-1)">&#8249; Prev</button>
+                    <span class="monthly-cal-title" id="monthlyCalTitle"></span>
+                    <button class="monthly-nav-btn" onclick="monthlyCalMove(1)">Next &#8250;</button>
+                </div>
+                <div id="monthlyCalBody"></div>
+                <div class="monthly-legend">
+                    <div class="mc-leg"><span class="mc-full"></span> Full Day</div>
+                    <div class="mc-leg"><span class="mc-half"></span> Half Day</div>
+                    <div class="mc-leg"><span class="mc-incomplete"></span> Incomplete</div>
+                    <div class="mc-leg"><span class="mc-absent"></span> Absent</div>
+                    <div class="mc-leg"><span class="mc-leave"></span> On Leave</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Employee Management -->
@@ -487,6 +661,7 @@
                 <button class="btn btn-secondary btn-sm" id="histFilterBtn">🔍 Apply</button>
                 <button class="btn btn-secondary btn-sm" id="histResetFilterBtn">✖ Clear</button>
                 <button class="btn btn-success btn-sm"   id="histExportBtn">📥 Export CSV</button>
+                <button class="btn btn-info btn-sm"      id="monthlyViewBtn" onclick="toggleMonthlyView()">📅 Monthly View</button>
                 <button class="btn btn-danger btn-sm"    id="histClearBtn">🗑️ Clear All</button>
             </div>
             <!-- Date Manager -->
@@ -2570,8 +2745,31 @@ async function processMessages(){
     let dateStr = document.getElementById('reportDate').value;
     if(!dateStr) dateStr = new Date().toISOString().split('T')[0];
 
-    // Show date confirmation modal — only proceed after user types the date
+    // Check if this date already has data in DB
+    const existingCount = dbRows.filter(r=>r.date===dateStr).length;
+    if(existingCount > 0){
+        const proceed = await showReprocessWarning(dateStr, existingCount);
+        if(!proceed) return;
+    }
+
+    // Show date confirmation modal
     openDateConfirm(dateStr, ()=> doProcessMessages(dateStr));
+}
+
+function showReprocessWarning(dateStr, count){
+    return new Promise(resolve=>{
+        openConfirm(
+            '⚠️ Date Already Has Data',
+            `<strong>${formatDateWithDay(dateStr)}</strong> already has <strong>${count} records</strong> saved.<br><br>
+            Re-processing will <strong style="color:#dc3545;">permanently overwrite</strong> all existing data for this date, including any manually resolved violations.<br><br>
+            Are you sure you want to continue?`,
+            ()=> resolve(true)
+        );
+        // Override cancel to resolve false
+        const cancelBtn = document.getElementById('confirmCancel');
+        const orig = cancelBtn.onclick;
+        cancelBtn.onclick = ()=>{ resolve(false); closeConfirm(); cancelBtn.onclick=orig; };
+    });
 }
 
 async function doProcessMessages(dateStr){
@@ -2587,6 +2785,7 @@ async function doProcessMessages(dateStr){
     document.getElementById('viewTabs').style.display   = 'flex';
     document.getElementById('resultsArea').style.display = 'block';
     renderView(activeViewTab);
+    renderDashboard(dateStr, lastReport);
 
     // ── Step 2: Show attendance instantly from in-memory data ──
     attendCurrentDate = dateStr;
@@ -2636,6 +2835,238 @@ function exportCSV(){
 }
 
 // ══════════════════════════════════════════════════════════════
+//  DARK MODE
+// ══════════════════════════════════════════════════════════════
+function toggleDarkMode(){
+    const isDark = document.body.classList.toggle('dark');
+    document.getElementById('darkModeBtn').textContent = isDark ? '☀️' : '🌙';
+    localStorage.setItem('slackTracker_darkMode', isDark ? '1' : '0');
+}
+function initDarkMode(){
+    if(localStorage.getItem('slackTracker_darkMode')==='1'){
+        document.body.classList.add('dark');
+        const btn = document.getElementById('darkModeBtn');
+        if(btn) btn.textContent='☀️';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════════════
+function renderDashboard(dateStr, report){
+    const panel = document.getElementById('dashPanel');
+    if(!panel) return;
+    panel.style.display = 'block';
+
+    const total   = report.length;
+    const fullDay = report.filter(r=>r.status==='Full Day'||r.status==='Present').length;
+    const halfDay = report.filter(r=>r.status==='Half Day').length;
+    const absent  = report.filter(r=>r.status==='Missing'||r.status==='Absent').length;
+    const onLeave = report.filter(r=>r.status==='On Leave').length;
+    const pct     = total ? Math.round((fullDay+halfDay*0.5)/total*100) : 0;
+    const pctColor = pct>=90?'#27ae60':pct>=75?'#e67e22':'#dc3545';
+
+    document.getElementById('dashDateLabel').textContent = '— '+formatDateWithDay(dateStr);
+    document.getElementById('dashGrid').innerHTML = `
+        <div class="dash-card">
+            <div class="dash-card-icon">👥</div>
+            <div class="dash-card-val">${total}</div>
+            <div class="dash-card-title">Total Employees</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">✅</div>
+            <div class="dash-card-val" style="color:#27ae60;">${fullDay}</div>
+            <div class="dash-card-title">Full Day</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">🌓</div>
+            <div class="dash-card-val" style="color:#e67e22;">${halfDay}</div>
+            <div class="dash-card-title">Half Day</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">❌</div>
+            <div class="dash-card-val" style="color:#dc3545;">${absent}</div>
+            <div class="dash-card-title">Absent</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">📅</div>
+            <div class="dash-card-val" style="color:#6c757d;">${onLeave}</div>
+            <div class="dash-card-title">On Leave</div>
+        </div>
+        <div class="dash-card">
+            <div class="dash-card-icon">📊</div>
+            <div class="dash-card-val" style="color:${pctColor};">${pct}%</div>
+            <div class="dash-card-title">Attendance Rate</div>
+            <div class="dash-card-sub">(Full + Half×0.5)</div>
+        </div>`;
+
+    // 7-day trend from dbRows
+    const trendDates = [];
+    for(let i=6;i>=0;i--){
+        const d = new Date(dateStr+'T00:00:00');
+        d.setDate(d.getDate()-i);
+        trendDates.push(d.toISOString().split('T')[0]);
+    }
+    const trendHtml = trendDates.map(d=>{
+        const rows = d===dateStr ? report : dbRows.filter(r=>r.date===d);
+        if(!rows.length) return `<div class="dash-trend-row"><div class="dash-trend-label">${getDayName(d).slice(0,3)}</div><div class="dash-trend-bar-bg"><div class="dash-trend-bar" style="width:0%;background:#e0e0e0;"></div></div><div class="dash-trend-pct" style="color:#bbb;">—</div></div>`;
+        const tot = rows.length;
+        const fd  = d===dateStr ? report.filter(r=>r.status==='Full Day'||r.status==='Present').length : rows.filter(r=>r.resolution==='present'||r.status==='Full Day').length;
+        const hd  = d===dateStr ? report.filter(r=>r.status==='Half Day').length : rows.filter(r=>r.status==='Half Day'&&r.resolution!=='violation').length;
+        const p   = tot ? Math.round((fd+hd*0.5)/tot*100) : 0;
+        const col = p>=90?'#27ae60':p>=75?'#e67e22':'#dc3545';
+        return `<div class="dash-trend-row">
+            <div class="dash-trend-label">${getDayName(d).slice(0,3)} ${formatDate(d).split(' ')[0]}</div>
+            <div class="dash-trend-bar-bg"><div class="dash-trend-bar" style="width:${p}%;background:${col};"></div></div>
+            <div class="dash-trend-pct" style="color:${col};">${p}%</div>
+        </div>`;
+    }).join('');
+    document.getElementById('dashTrend').innerHTML = trendHtml;
+
+    // Team comparison
+    const annReport = report.filter(r=>r.team==='annotation');
+    const assReport = report.filter(r=>r.team==='assessment');
+    function teamStats(rpt){
+        if(!rpt.length) return {pct:0,fd:0,hd:0,ab:0};
+        const fd=rpt.filter(r=>r.status==='Full Day'||r.status==='Present').length;
+        const hd=rpt.filter(r=>r.status==='Half Day').length;
+        const ab=rpt.filter(r=>r.status==='Missing'||r.status==='Absent').length;
+        return {pct:Math.round((fd+hd*0.5)/rpt.length*100),fd,hd,ab};
+    }
+    const annS = teamStats(annReport), assS = teamStats(assReport);
+    function teamCard(label, s, color){
+        const winner = s.pct>=(label==='🔵 Annotation'?assS.pct:annS.pct)?'🏆 ':'';
+        return `<div class="dash-team-card">
+            <div class="dash-team-name">${winner}${label} — <strong style="color:${s.pct>=90?'#27ae60':s.pct>=75?'#e67e22':'#dc3545'}">${s.pct}%</strong></div>
+            <div class="dash-team-row"><span>Full Day</span><span style="color:#27ae60;font-weight:700;">${s.fd}</span></div>
+            <div class="dash-team-row"><span>Half Day</span><span style="color:#e67e22;font-weight:700;">${s.hd}</span></div>
+            <div class="dash-team-row"><span>Absent</span><span style="color:#dc3545;font-weight:700;">${s.ab}</span></div>
+        </div>`;
+    }
+    document.getElementById('dashTeams').innerHTML = teamCard('🔵 Annotation',annS)+teamCard('🟠 Assessment',assS);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  MONTHLY SUMMARY VIEW
+// ══════════════════════════════════════════════════════════════
+let _monthlyYear  = new Date().getFullYear();
+let _monthlyMonth = new Date().getMonth();
+let _monthlyVisible = false;
+
+function toggleMonthlyView(){
+    _monthlyVisible = !_monthlyVisible;
+    const panel = document.getElementById('monthlyPanel');
+    const btn   = document.getElementById('monthlyViewBtn');
+    panel.style.display = _monthlyVisible ? 'block' : 'none';
+    btn.textContent = _monthlyVisible ? '📅 Hide Monthly' : '📅 Monthly View';
+    if(_monthlyVisible) renderMonthlyCalendar();
+}
+
+function monthlyCalMove(dir){
+    _monthlyMonth += dir;
+    if(_monthlyMonth>11){_monthlyMonth=0;_monthlyYear++;}
+    if(_monthlyMonth<0){_monthlyMonth=11;_monthlyYear--;}
+    renderMonthlyCalendar();
+}
+
+function renderMonthlyCalendar(){
+    const y = _monthlyYear, m = _monthlyMonth;
+    const title = new Date(y,m,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    document.getElementById('monthlyCalTitle').textContent = title;
+
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    const today = new Date().toISOString().split('T')[0];
+
+    // All employees
+    const allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
+                    ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
+
+    // Build day columns
+    const days = [];
+    for(let d=1;d<=daysInMonth;d++){
+        const mm=String(m+1).padStart(2,'0'), dd=String(d).padStart(2,'0');
+        days.push({d, dateStr:`${y}-${mm}-${dd}`});
+    }
+
+    // Build header row with day numbers + day names
+    let headerRow = '<tr><th class="monthly-cal-emp monthly-cal-day-head">Employee</th>';
+    days.forEach(({d,dateStr})=>{
+        const dayName = new Date(dateStr+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short'});
+        const isToday = dateStr===today;
+        headerRow += `<th class="monthly-cal-day-head" style="${isToday?'color:#1a4d8c;font-weight:800;':''}">
+            <div>${d}</div><div style="font-size:9px;color:#aaa;">${dayName}</div>
+        </th>`;
+    });
+    headerRow += '</tr>';
+
+    // Build employee rows
+    let rows = '';
+    const annEmps = allEmp.filter(e=>e.team==='annotation');
+    const assEmps = allEmp.filter(e=>e.team==='assessment');
+
+    function empRow(e){
+        let row = `<tr><td class="monthly-cal-emp">${esc(e.name)}</td>`;
+        days.forEach(({dateStr})=>{
+            const isFuture = dateStr > today;
+            if(isFuture){ row+=`<td class="mc-cell"><span class="mc-future">·</span></td>`; return; }
+            // Get status from dbRows
+            const rec = dbRows.find(r=>r.date===dateStr&&r.name===e.name);
+            let cls='mc-empty', sym='·', title='No data';
+            if(rec){
+                const res=rec.resolution, st=rec.status;
+                if(res==='On Leave'){cls='mc-leave';sym='L';title='On Leave';}
+                else if(res==='present'||res==='Ignored'){
+                    const a=timeToMinutes(rec.login),b=timeToMinutes(rec.logout);
+                    if(a!==null&&b!==null){const h=((b<a?b+1440:b)-a)/60;
+                        if(h>=7.5){cls='mc-full';sym='✓';title='Full Day';}
+                        else if(h<4.5){cls='mc-half';sym='½';title='Half Day';}
+                        else{cls='mc-incomplete';sym='~';title='Incomplete';}
+                    } else {cls='mc-full';sym='✓';title='Full Day';}
+                } else if(res==='violation'){
+                    if(st==='Missing'){cls='mc-absent';sym='✗';title='Absent';}
+                    else if(st==='Incomplete'){cls='mc-incomplete';sym='~';title='Incomplete';}
+                    else if(st==='Half Day'){cls='mc-half';sym='½';title='Half Day';}
+                }
+            }
+            row+=`<td class="mc-cell" title="${title} — ${formatDate(dateStr)}"><span class="${cls}">${sym}</span></td>`;
+        });
+        row+='</tr>';
+        return row;
+    }
+
+    rows += `<tr><td colspan="${days.length+1}" style="background:#e8f0fe;color:#1a4d8c;font-size:11px;font-weight:700;padding:6px 10px;">🔵 Data Annotation (${annEmps.length})</td></tr>`;
+    rows += annEmps.map(empRow).join('');
+    rows += `<tr><td colspan="${days.length+1}" style="background:#fff3e0;color:#e67e22;font-size:11px;font-weight:700;padding:6px 10px;">🟠 Data Assessment (${assEmps.length})</td></tr>`;
+    rows += assEmps.map(empRow).join('');
+
+    document.getElementById('monthlyCalBody').innerHTML =
+        `<table class="monthly-cal-table"><thead>${headerRow}</thead><tbody>${rows}</tbody></table>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════════════════════
+function initKeyboardShortcuts(){
+    document.addEventListener('keydown', e=>{
+        // Ignore if typing in an input/textarea/select
+        const tag = document.activeElement.tagName;
+        if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+        // Ignore if any modal is open
+        if(document.querySelector('.modal-overlay.open')) return;
+
+        if(e.key==='p'||e.key==='P'){
+            e.preventDefault();
+            const box = document.getElementById('slackInput');
+            if(box){ box.focus(); box.scrollIntoView({behavior:'smooth',block:'center'}); showToast('📋 Ready to paste — Ctrl+V'); }
+        }
+        if(e.key==='Escape'){
+            const box = document.getElementById('slackInput');
+            if(box && box.value){ box.value=''; showToast('🗑️ Input cleared'); }
+        }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════════════
 // ── App init — called once after login is confirmed ──
@@ -2643,6 +3074,8 @@ async function initApp(){
     if(window._appInitialised) return;
     window._appInitialised = true;
 
+    initDarkMode();
+    initKeyboardShortcuts();
     loadTeams(); renderEmpGrid();
     document.getElementById('reportDate').value = new Date().toISOString().split('T')[0];
     await loadFromCloud();
