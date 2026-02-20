@@ -243,6 +243,11 @@
         .ab-leave{background:#e2e3e5;color:#383d41;}
         .ab-manual{background:#e8d5ff;color:#5a32a3;font-size:10px;margin-left:4px;}
         .no-attend{padding:30px;text-align:center;color:#aaa;font-size:14px;}
+        .attend-note-chip{display:inline-block;background:#fff8e1;border:1px solid #ffe082;color:#7a5c00;font-size:11px;padding:2px 8px;border-radius:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;cursor:default;}
+        .attend-note-chip:hover{max-width:none;white-space:normal;z-index:10;position:relative;}
+        .attend-note-empty{color:#ddd;font-size:13px;}
+        body.dark .attend-note-chip{background:#2a2410;border-color:#6a5000;color:#e8c84a;}
+        body.dark .attend-note-empty{color:#3a3d4e;}
         .attend-emp-history{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:16px;}
         .attend-emp-history h4{font-size:13px;font-weight:700;color:#333;margin-bottom:12px;}
         .attend-hist-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;flex-wrap:wrap;}
@@ -517,7 +522,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.0</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.1</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1838,6 +1843,14 @@ function empRow(e){
         <td><strong>${e.workingHours}</strong></td>
     </tr>`;
 }
+function setViewTab(view){
+    activeViewTab = view;
+    document.querySelectorAll('.view-tab').forEach(t=>{
+        t.className='view-tab'+(view==='all'?' active-all':view==='violations'?' active-violations':view==='annotation'?' active-annotation':' active-assessment');
+    });
+    renderView(view);
+}
+
 function renderView(view){
     activeViewTab=view;
     document.querySelectorAll('.view-tab').forEach(t=>{const v=t.dataset.view;t.className='view-tab'+(v===view?' active-'+view:'');});
@@ -2214,7 +2227,9 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
                 <td><span class="time-badge">${loginTxt}</span></td>
                 <td><span class="time-badge">${logoutTxt}</span></td>
                 <td><strong>${hours}</strong></td>
-                <td>${r.notes?'<span style="color:#888;font-size:12px;">'+esc(r.notes)+'</span>':''}</td>
+                <td>${r.notes
+                ? '<span class="attend-note-chip">📝 '+esc(r.notes)+'</span>'
+                : '<span class="attend-note-empty">—</span>'}</td>
             </tr>`;
         }).join('');
 
@@ -2336,7 +2351,9 @@ function renderAttendance(dateStr){
             <td><span class="time-badge">${loginTxt}</span></td>
             <td><span class="time-badge">${logoutTxt}</span></td>
             <td><strong>${hours}</strong></td>
-            <td>${r.notes?'<span style="color:#888;font-size:12px;">'+esc(r.notes)+'</span>':''}</td>
+            <td>${r.notes
+                ? '<span class="attend-note-chip">📝 '+esc(r.notes)+'</span>'
+                : '<span class="attend-note-empty">—</span>'}</td>
             <td>
                 <button class="btn btn-xs btn-secondary" onclick="openAttendanceModalFor(window._attendRowMap['${rowKey}'])">✏️ Edit</button>
                 ${r.id?`<button class="btn btn-xs btn-danger" style="margin-left:4px;" onclick="deleteAttendEntry('${r.id}')">🗑️</button>`:''}
@@ -2809,6 +2826,17 @@ async function doProcessMessages(dateStr){
 
     document.getElementById('lastUpdated').textContent = `✓ Last updated: ${new Date().toLocaleString()}`;
     showToast(viols.length ? `✅ <strong>${viols.length} violation${viols.length!==1?'s':''}</strong> found. Saving to cloud…` : `✅ Everyone compliant on ${formatDate(dateStr)}! Saving…`);
+
+    // ── Auto-scroll: jump to violations if any, else to results ──
+    setTimeout(()=>{
+        if(viols.length){
+            // Switch to violations tab and scroll to it
+            setViewTab('violations');
+            document.getElementById('viewTabs').scrollIntoView({behavior:'smooth', block:'start'});
+        } else {
+            document.getElementById('resultsArea').scrollIntoView({behavior:'smooth', block:'start'});
+        }
+    }, 200);
 
     // ── Step 3: Save to cloud in background — UI already showing results ──
     await saveViolationsForDate(dateStr, lastReport);
