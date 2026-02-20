@@ -513,7 +513,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.8</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.9</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -3110,7 +3110,7 @@ function renderEmpHistory(){
                 <div style="display:flex;align-items:center;gap:10px;">${esc(e.name)} ${teamBadge}</div>
                 <div class="hist-emp-meta"><span style="color:#aaa;font-size:11px;">${e.rows.length} records ▼</span></div>
             </div>
-            <div class="hist-emp-body open" id="ehb${i}">
+            <div class="hist-emp-body" id="ehb${i}">
                 <table class="hist-table"><thead><tr>
                     <th>Date</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th><th>Action</th>
                 </tr></thead><tbody>${rowsHtml}</tbody></table>
