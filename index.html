@@ -513,7 +513,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.7</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.8</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -846,11 +846,11 @@
             <div id="ignoredSubChoice" style="display:none;margin-bottom:14px;">
                 <p style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px;">Count this as:</p>
                 <div style="display:flex;gap:10px;">
-                    <div class="res-option" id="ignSubFull" onclick="setIgnoredType('full')" style="flex:1;padding:10px;">
+                    <div class="res-option" id="ignSubFull" onclick="setIgnoredType('full',event)" style="flex:1;padding:10px;">
                         <div class="res-icon" style="font-size:18px;">✅</div>
                         <div class="res-label">Full Day</div>
                     </div>
-                    <div class="res-option" id="ignSubHalf" onclick="setIgnoredType('half')" style="flex:1;padding:10px;">
+                    <div class="res-option" id="ignSubHalf" onclick="setIgnoredType('half',event)" style="flex:1;padding:10px;">
                         <div class="res-icon" style="font-size:18px;">🌓</div>
                         <div class="res-label">Half Day</div>
                     </div>
@@ -1503,6 +1503,7 @@ function openEditModal(date, name){
     if(!v) return;
     editContext = {date, name};
     selectedResolution = v.resolution||'violation';
+    _ignoredType = 'full'; // reset sub-choice to Full Day each time modal opens
 
     document.getElementById('editInfoBox').innerHTML=`
         <div class="vi-row"><span>Employee</span><strong>${esc(v.name)}</strong></div>
@@ -2985,7 +2986,8 @@ function updateTodayViolTabLabel(){
 // ══════════════════════════════════════════════════════════════
 let _ignoredType = 'full'; // 'full' or 'half'
 
-function setIgnoredType(type){
+function setIgnoredType(type, e){
+    if(e) e.stopPropagation(); // prevent bubble to parent res-option listener
     _ignoredType = type;
     document.getElementById('ignSubFull').className = 'res-option' + (type==='full'?' ign-selected':'');
     document.getElementById('ignSubHalf').className = 'res-option' + (type==='half'?' ign-selected':'');
@@ -3339,7 +3341,9 @@ async function initApp(){
     document.getElementById('confirmCancel').addEventListener('click',closeConfirm);
     document.getElementById('confirmOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('confirmOverlay'))closeConfirm();});
 
-    document.querySelectorAll('.res-option').forEach(opt=>{
+    // Only wire res-options that have a data-res attribute (top-level choices)
+    // ignSubFull / ignSubHalf intentionally excluded — they have their own onclick handlers
+    document.querySelectorAll('.res-option[data-res]').forEach(opt=>{
         opt.addEventListener('click',()=>{selectedResolution=opt.dataset.res;updateResOptions();updateReasonLabel();});
     });
     document.getElementById('editSave').addEventListener('click',saveEdit);
