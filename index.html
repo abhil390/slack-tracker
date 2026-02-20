@@ -271,27 +271,6 @@
 
 
 
-        /* ── Dashboard ── */
-        #dashPanel{background:white;border:1px solid #e0e0e0;border-radius:12px;padding:20px;margin-bottom:20px;}
-        .dash-title{font-size:14px;font-weight:700;color:#2c3e50;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-        .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px;}
-        .dash-card{background:#f8f9fa;border:1px solid #eee;border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;}
-        .dash-card-val{font-size:28px;font-weight:800;line-height:1;}
-        .dash-card-title{font-size:11px;text-transform:uppercase;color:#888;margin-top:4px;letter-spacing:.4px;}
-        .dash-card-sub{font-size:11px;color:#aaa;margin-top:2px;}
-        .dash-card-icon{position:absolute;right:12px;top:12px;font-size:24px;opacity:.15;}
-        .dash-trend-title{font-size:12px;font-weight:700;color:#555;margin-bottom:8px;}
-        .dash-trend-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-        .dash-trend-label{font-size:11px;color:#888;min-width:70px;}
-        .dash-trend-bar-bg{flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;}
-        .dash-trend-bar{height:8px;border-radius:4px;transition:width .5s ease;}
-        .dash-trend-pct{font-size:11px;font-weight:700;min-width:36px;text-align:right;}
-        .dash-teams{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-        .dash-team-card{background:#f8f9fa;border:1px solid #eee;border-radius:10px;padding:12px 14px;}
-        .dash-team-name{font-size:12px;font-weight:700;color:#555;margin-bottom:8px;}
-        .dash-team-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0;border-bottom:1px solid #f0f0f0;}
-        .dash-team-row:last-child{border-bottom:none;}
-        .dash-empty{color:#bbb;font-size:13px;text-align:center;padding:16px;}
 
 
         /* ── Monthly Summary ── */
@@ -384,12 +363,6 @@
         body.dark .modal-dateconfirm-body p,.dark .mdd-instruction{color:#8a9ab8;}
         body.dark .history-summary{background:#252839;border-color:#2a2d3e;}
         body.dark .attend-stat{background:#252839;border-color:#2a2d3e;}
-        body.dark #dashPanel{background:#1e2130;border-color:#2a2d3e;}
-        body.dark .dash-card{background:#252839;border-color:#2a2d3e;}
-        body.dark .dash-card-title{color:#6a7898;}
-        body.dark .dash-trend-bar-bg{background:#2a2d3e;}
-        body.dark .dash-team-row{border-color:#2a2d3e;}
-        body.dark .dash-team-name{color:#8a9ab8;}
         body.dark .monthly-cal-wrap{background:#1e2130;}
         body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
         body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
@@ -522,7 +495,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.1</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.2</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -530,22 +503,6 @@
     <div class="sync-bar loading" id="syncBar">
         <div class="sync-dot loading" id="syncDot"></div>
         <span id="syncMsg">Connecting to shared database…</span>
-    </div>
-
-    <!-- Dashboard -->
-    <div id="dashPanel" style="display:none;">
-        <div class="dash-title">📊 Attendance Dashboard <span id="dashDateLabel" style="font-size:12px;color:#aaa;font-weight:400;"></span></div>
-        <div class="dash-grid" id="dashGrid"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div>
-                <div class="dash-trend-title">📅 Last 7 Days Trend</div>
-                <div id="dashTrend"></div>
-            </div>
-            <div>
-                <div class="dash-trend-title">👥 Team Comparison</div>
-                <div class="dash-teams" id="dashTeams"></div>
-            </div>
-        </div>
     </div>
 
     <!-- Monthly Summary -->
@@ -2802,8 +2759,6 @@ async function doProcessMessages(dateStr){
     document.getElementById('viewTabs').style.display   = 'flex';
     document.getElementById('resultsArea').style.display = 'block';
     renderView(activeViewTab);
-    renderDashboard(dateStr, lastReport);
-
     // ── Step 2: Show attendance instantly from in-memory data ──
     attendCurrentDate = dateStr;
     refreshAttendDateSelect();
@@ -2881,98 +2836,6 @@ function initDarkMode(){
 // ══════════════════════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════════════════════
-function renderDashboard(dateStr, report){
-    const panel = document.getElementById('dashPanel');
-    if(!panel) return;
-    panel.style.display = 'block';
-
-    const total   = report.length;
-    const fullDay = report.filter(r=>r.status==='Full Day'||r.status==='Present').length;
-    const halfDay = report.filter(r=>r.status==='Half Day').length;
-    const absent  = report.filter(r=>r.status==='Missing'||r.status==='Absent').length;
-    const onLeave = report.filter(r=>r.status==='On Leave').length;
-    const pct     = total ? Math.round((fullDay+halfDay*0.5)/total*100) : 0;
-    const pctColor = pct>=90?'#27ae60':pct>=75?'#e67e22':'#dc3545';
-
-    document.getElementById('dashDateLabel').textContent = '— '+formatDateWithDay(dateStr);
-    document.getElementById('dashGrid').innerHTML = `
-        <div class="dash-card">
-            <div class="dash-card-icon">👥</div>
-            <div class="dash-card-val">${total}</div>
-            <div class="dash-card-title">Total Employees</div>
-        </div>
-        <div class="dash-card">
-            <div class="dash-card-icon">✅</div>
-            <div class="dash-card-val" style="color:#27ae60;">${fullDay}</div>
-            <div class="dash-card-title">Full Day</div>
-        </div>
-        <div class="dash-card">
-            <div class="dash-card-icon">🌓</div>
-            <div class="dash-card-val" style="color:#e67e22;">${halfDay}</div>
-            <div class="dash-card-title">Half Day</div>
-        </div>
-        <div class="dash-card">
-            <div class="dash-card-icon">❌</div>
-            <div class="dash-card-val" style="color:#dc3545;">${absent}</div>
-            <div class="dash-card-title">Absent</div>
-        </div>
-        <div class="dash-card">
-            <div class="dash-card-icon">📅</div>
-            <div class="dash-card-val" style="color:#6c757d;">${onLeave}</div>
-            <div class="dash-card-title">On Leave</div>
-        </div>
-        <div class="dash-card">
-            <div class="dash-card-icon">📊</div>
-            <div class="dash-card-val" style="color:${pctColor};">${pct}%</div>
-            <div class="dash-card-title">Attendance Rate</div>
-            <div class="dash-card-sub">(Full + Half×0.5)</div>
-        </div>`;
-
-    // 7-day trend from dbRows
-    const trendDates = [];
-    for(let i=6;i>=0;i--){
-        const d = new Date(dateStr+'T00:00:00');
-        d.setDate(d.getDate()-i);
-        trendDates.push(d.toISOString().split('T')[0]);
-    }
-    const trendHtml = trendDates.map(d=>{
-        const rows = d===dateStr ? report : dbRows.filter(r=>r.date===d);
-        if(!rows.length) return `<div class="dash-trend-row"><div class="dash-trend-label">${getDayName(d).slice(0,3)}</div><div class="dash-trend-bar-bg"><div class="dash-trend-bar" style="width:0%;background:#e0e0e0;"></div></div><div class="dash-trend-pct" style="color:#bbb;">—</div></div>`;
-        const tot = rows.length;
-        const fd  = d===dateStr ? report.filter(r=>r.status==='Full Day'||r.status==='Present').length : rows.filter(r=>r.resolution==='present'||r.status==='Full Day').length;
-        const hd  = d===dateStr ? report.filter(r=>r.status==='Half Day').length : rows.filter(r=>r.status==='Half Day'&&r.resolution!=='violation').length;
-        const p   = tot ? Math.round((fd+hd*0.5)/tot*100) : 0;
-        const col = p>=90?'#27ae60':p>=75?'#e67e22':'#dc3545';
-        return `<div class="dash-trend-row">
-            <div class="dash-trend-label">${getDayName(d).slice(0,3)} ${formatDate(d).split(' ')[0]}</div>
-            <div class="dash-trend-bar-bg"><div class="dash-trend-bar" style="width:${p}%;background:${col};"></div></div>
-            <div class="dash-trend-pct" style="color:${col};">${p}%</div>
-        </div>`;
-    }).join('');
-    document.getElementById('dashTrend').innerHTML = trendHtml;
-
-    // Team comparison
-    const annReport = report.filter(r=>r.team==='annotation');
-    const assReport = report.filter(r=>r.team==='assessment');
-    function teamStats(rpt){
-        if(!rpt.length) return {pct:0,fd:0,hd:0,ab:0};
-        const fd=rpt.filter(r=>r.status==='Full Day'||r.status==='Present').length;
-        const hd=rpt.filter(r=>r.status==='Half Day').length;
-        const ab=rpt.filter(r=>r.status==='Missing'||r.status==='Absent').length;
-        return {pct:Math.round((fd+hd*0.5)/rpt.length*100),fd,hd,ab};
-    }
-    const annS = teamStats(annReport), assS = teamStats(assReport);
-    function teamCard(label, s, color){
-        const winner = s.pct>=(label==='🔵 Annotation'?assS.pct:annS.pct)?'🏆 ':'';
-        return `<div class="dash-team-card">
-            <div class="dash-team-name">${winner}${label} — <strong style="color:${s.pct>=90?'#27ae60':s.pct>=75?'#e67e22':'#dc3545'}">${s.pct}%</strong></div>
-            <div class="dash-team-row"><span>Full Day</span><span style="color:#27ae60;font-weight:700;">${s.fd}</span></div>
-            <div class="dash-team-row"><span>Half Day</span><span style="color:#e67e22;font-weight:700;">${s.hd}</span></div>
-            <div class="dash-team-row"><span>Absent</span><span style="color:#dc3545;font-weight:700;">${s.ab}</span></div>
-        </div>`;
-    }
-    document.getElementById('dashTeams').innerHTML = teamCard('🔵 Annotation',annS)+teamCard('🟠 Assessment',assS);
-}
 
 // ══════════════════════════════════════════════════════════════
 //  MONTHLY SUMMARY VIEW
