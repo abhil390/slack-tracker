@@ -233,14 +233,14 @@
         .attend-halfday td:first-child{border-left:4px solid #e67e22;}
         .attend-incomplete td:first-child{border-left:4px solid #e67e22;}
         .attend-absent td:first-child{border-left:4px solid #dc3545;}
-        .attend-leave td:first-child{border-left:4px solid #6c757d;}
+        .attend-leave td:first-child{border-left:4px solid #dc3545;}
         .attend-badge{padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;}
         .ab-present{background:#d4edda;color:#155724;}
         .ab-fullday{background:#d4edda;color:#155724;}
         .ab-halfday{background:#fde8c8;color:#8a4a00;}
         .ab-incomplete{background:#fff3cd;color:#856404;}
         .ab-absent{background:#f8d7da;color:#721c24;}
-        .ab-leave{background:#e2e3e5;color:#383d41;}
+        .ab-leave{background:#f8d7da;color:#721c24;}
         .ab-manual{background:#e8d5ff;color:#5a32a3;font-size:10px;margin-left:4px;}
         .no-attend{padding:30px;text-align:center;color:#aaa;font-size:14px;}
         .attend-note-chip{display:inline-block;background:#fff8e1;border:1px solid #ffe082;color:#7a5c00;font-size:11px;padding:2px 8px;border-radius:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;cursor:default;}
@@ -513,7 +513,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.5</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.6</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -648,17 +648,12 @@
                     <button class="btn btn-info btn-sm"      id="monthlyViewBtn" onclick="toggleMonthlyView()">📅 Monthly View</button>
                     <button class="btn btn-danger btn-sm"    id="histClearBtn">🗑️ Clear All</button>
                 </div>
-                <!-- Date Manager -->
-                <div class="date-manager">
-                    <h4>📅 Manage Data by Date</h4>
-                    <div class="date-manager-row">
-                        <select id="dateSelect" onchange="onDateSelectChange()">
-                            <option value="">— Select a date —</option>
-                        </select>
-                        <button class="btn btn-secondary btn-sm" id="dateReenterBtn" onclick="preloadSelectedDate()" disabled>✏️ Re-enter Data</button>
-                    </div>
-                    <div class="date-manager-meta" id="dateMeta"></div>
-                </div>
+                <!-- dateSelect kept as hidden for renderDateManager compat -->
+                <select id="dateSelect" style="display:none;" onchange="onDateSelectChange()">
+                    <option value="">— Select a date —</option>
+                </select>
+                <span id="dateReenterBtn" style="display:none;"></span>
+                <span id="dateMeta" style="display:none;"></span>
                 <div id="histContent"></div>
                 <!-- Hidden date inputs kept for backwards compat with getHistFilters -->
                 <input type="hidden" id="histFromDate" value=""/>
@@ -1234,6 +1229,7 @@ const LS_TEAMS = 'slackTracker_teams_v1';
 let teams = {annotation:[],assessment:[]};
 let dbRows = [];   // flat array from Supabase
 let lastReport = [];
+let lastProcessedDate = ''; // track the date of last processed data
 let activeEmpTab = 'annotation';
 let activeViewTab = 'all';
 let editContext = null;
@@ -1550,10 +1546,11 @@ function renderHistory(filters={}){
     const {team='all',type='all',from='',to=''}=filters;
     let violations=[...dbRows];
 
-    // On "Today's Violations" tab, filter to today's date by default
-    const todayStr = new Date().toISOString().split('T')[0];
+    // On "Today's Violations" tab, show the last processed date's violations
+    // Falls back to actual today if no date has been processed yet
     if(_activeHistTab==='today'){
-        violations = violations.filter(v=>v.date===todayStr);
+        const showDate = lastProcessedDate || new Date().toISOString().split('T')[0];
+        violations = violations.filter(v=>v.date===showDate);
     }
 
     if(team!=='all')           violations=violations.filter(v=>v.team===team);
@@ -2848,6 +2845,7 @@ function showReprocessWarning(dateStr, count){
 }
 
 async function doProcessMessages(dateStr){
+    lastProcessedDate = dateStr; // track for Today's Violations tab
 
     // ── Step 1: Show results instantly (synchronous, no DB needed) ──
     const ann   = lastReport.filter(r=>r.team==='annotation');
@@ -2894,6 +2892,10 @@ async function doProcessMessages(dateStr){
         }
     }, 200);
 
+    // Update Today's Violations tab label to show processed date
+    updateTodayViolTabLabel();
+    renderHistory(getHistFilters());
+
     // ── Step 3: Save to cloud in background — UI already showing results ──
     await saveViolationsForDate(dateStr, lastReport);
 }
@@ -2939,7 +2941,16 @@ function switchHistTab(tab){
     document.getElementById('tabAllHist').classList.toggle('active', tab==='all');
     document.getElementById('todayViolPane').style.display = tab==='today' ? 'block' : 'none';
     document.getElementById('allHistPane').style.display   = tab==='all'   ? 'block' : 'none';
-    if(tab==='today') renderHistory(getHistFilters());
+    if(tab==='today'){
+        updateTodayViolTabLabel();
+        renderHistory(getHistFilters());
+    }
+}
+
+function updateTodayViolTabLabel(){
+    const showDate = lastProcessedDate || new Date().toISOString().split('T')[0];
+    const btn = document.getElementById('tabTodayViol');
+    if(btn) btn.textContent = '📅 ' + formatDateWithDay(showDate) + ' Violations';
 }
 
 // ══════════════════════════════════════════════════════════════
