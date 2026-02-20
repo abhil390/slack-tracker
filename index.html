@@ -513,7 +513,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v9.4</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -660,6 +660,9 @@
                     <div class="date-manager-meta" id="dateMeta"></div>
                 </div>
                 <div id="histContent"></div>
+                <!-- Hidden date inputs kept for backwards compat with getHistFilters -->
+                <input type="hidden" id="histFromDate" value=""/>
+                <input type="hidden" id="histToDate" value=""/>
             </div>
 
             <!-- EMPLOYEE HISTORY TAB -->
@@ -1655,10 +1658,12 @@ function formatDateWithDay(d){
 }
 
 function getHistFilters(){
-    return{team:document.getElementById('histTeamFilter').value,
-           type:document.getElementById('histTypeFilter').value,
-           from:document.getElementById('histFromDate').value,
-           to:  document.getElementById('histToDate').value};
+    return{
+        team: document.getElementById('histTeamFilter')?.value || 'all',
+        type: document.getElementById('histTypeFilter')?.value || 'active',
+        from: document.getElementById('histFromDate')?.value  || '',
+        to:   document.getElementById('histToDate')?.value    || ''
+    };
 }
 
 function exportHistoryCSV(filters={}){
@@ -3243,7 +3248,8 @@ async function initApp(){
     document.getElementById('refreshHistBtn').addEventListener('click',e=>{e.stopPropagation();loadFromCloud();});
     document.getElementById('histFilterBtn').addEventListener('click',()=>renderHistory(getHistFilters()));
     document.getElementById('histResetFilterBtn').addEventListener('click',()=>{
-        ['histTeamFilter','histTypeFilter','histFromDate','histToDate'].forEach(id=>document.getElementById(id).value=id.includes('Filter')?'all':'');
+        ['histTeamFilter','histTypeFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all';});
+        ['histFromDate','histToDate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
         renderHistory();
     });
     document.getElementById('histExportBtn').addEventListener('click',()=>exportHistoryCSV(getHistFilters()));
