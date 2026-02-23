@@ -241,6 +241,10 @@
         .ab-incomplete{background:#fff3cd;color:#856404;}
         .ab-absent{background:#f8d7da;color:#721c24;}
         .ab-leave{background:#f8d7da;color:#721c24;}
+        .ab-weekoff{background:#e8d5ff;color:#5a32a3;}
+        .attend-weekoff td:first-child{border-left:4px solid #8e44ad;}
+        .res-badge.res-weekoff{background:#e8d5ff;color:#5a32a3;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
+        .res-option.selected-weekoff{border-color:#8e44ad;background:#f5f0ff;}
         .ab-manual{background:#e8d5ff;color:#5a32a3;font-size:10px;margin-left:4px;}
         .no-attend{padding:30px;text-align:center;color:#aaa;font-size:14px;}
         .attend-note-chip{display:inline-block;background:#fff8e1;border:1px solid #ffe082;color:#7a5c00;font-size:11px;padding:2px 8px;border-radius:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle;cursor:default;}
@@ -363,6 +367,9 @@
         body.dark .modal-dateconfirm-body p,.dark .mdd-instruction{color:#8a9ab8;}
         body.dark .history-summary{background:#252839;border-color:#2a2d3e;}
         body.dark .attend-stat{background:#252839;border-color:#2a2d3e;}
+        body.dark .ab-weekoff{background:#2a1a44;color:#c9a8ff;}
+        body.dark .attend-weekoff td:first-child{border-left-color:#8e44ad;}
+        body.dark .res-badge.res-weekoff{background:#2a1a44;color:#c9a8ff;}
         body.dark .monthly-cal-wrap{background:#1e2130;}
         body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
         body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
@@ -513,7 +520,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.5</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -640,6 +647,7 @@
                         <option value="all">All Statuses</option>
                         <option value="resolved">Resolved</option>
                         <option value="On Leave">On Leave</option>
+                        <option value="Week Off">Week Off</option>
                         <option value="Ignored">Ignored</option>
                     </select>
                     <button class="btn btn-secondary btn-sm" id="histFilterBtn">🔍 Filter</button>
@@ -774,6 +782,8 @@
                 <select id="attendStatus" onchange="onAttendStatusChange()">
                     <option value="Full Day">✅ Full Day (6+ hrs)</option>
                     <option value="Half Day">🌓 Half Day (less than 6 hrs)</option>
+                    <option value="Week Off">🏖️ Week Off</option>
+                    <option value="On Leave">📅 On Leave</option>
                     <option value="Incomplete">⚠️ Incomplete (missing login or logout)</option>
                     <option value="Absent">❌ Absent</option>
                     <option value="On Leave">📅 On Leave</option>
@@ -825,7 +835,7 @@
         <div class="modal-edit-body">
             <div class="viol-info-box" id="editInfoBox"></div>
             <p style="font-size:13px;font-weight:600;color:#555;margin-bottom:10px;">Change resolution to:</p>
-            <div class="resolution-options">
+            <div class="resolution-options" style="grid-template-columns:1fr 1fr;">
                 <div class="res-option" data-res="violation" id="resOptViolation">
                     <div class="res-icon">🚨</div>
                     <div class="res-label">Keep as Violation</div>
@@ -840,6 +850,11 @@
                     <div class="res-icon">🔕</div>
                     <div class="res-label">Ignore / Excuse</div>
                     <div class="res-desc">System error or known reason</div>
+                </div>
+                <div class="res-option" data-res="Week Off" id="resOptWeekOff">
+                    <div class="res-icon">🏖️</div>
+                    <div class="res-label">Mark as Week Off</div>
+                    <div class="res-desc">Scheduled day off for this employee</div>
                 </div>
             </div>
             <!-- Ignored sub-choice: Full Day or Half Day -->
@@ -1285,7 +1300,8 @@ async function saveViolationsForDate(dateStr, report){
             const cleanLogin  = r.login  === '❌ No login'  ? '' : (r.login  || '');
             const cleanLogout = r.logout === '❌ No logout' ? '' : (r.logout || '');
             // Half Day is only a violation if hours < 4 (isViolation flag from getAttendanceStatus)
-            const isViol = r.status==='Missing'; // Only Missing is a violation
+            const isViol    = r.status==='Missing'; // Only Missing is a violation
+            const isWeekOff = r.status==='Week Off';
             return {
                 date:          dateStr,
                 name:          r.name,
@@ -1294,9 +1310,9 @@ async function saveViolationsForDate(dateStr, report){
                 login:         cleanLogin,
                 logout:        cleanLogout,
                 working_hours: r.workingHours || '-',
-                resolution:    isViol ? 'violation' : 'present',  // violations start as unresolved
-                reason:        '',
-                resolved_at:   ''
+                resolution:    isWeekOff ? 'Week Off' : isViol ? 'violation' : 'present',
+                reason:        isWeekOff ? '[Auto] Weekend week off' : '',
+                resolved_at:   isWeekOff ? new Date().toLocaleString() : ''
             };
         });
 
@@ -1391,7 +1407,8 @@ async function saveResolutionToCloud(date, name, resolution, reason){
         }
 
         const label = resolution === 'violation' ? 'Reverted to Violation' :
-                      resolution === 'On Leave'  ? 'Marked as On Leave'    : 'Marked as Ignored';
+                      resolution === 'On Leave'  ? 'Marked as On Leave'    :
+                      resolution === 'Week Off'  ? 'Marked as Week Off'    : 'Marked as Ignored';
         setSyncStatus('ok', '✅ ' + label + ' for ' + name + ' — saved & synced.');
 
         // STEP 6: NO background reload — cache is already correct.
@@ -1523,21 +1540,25 @@ function updateResOptions(){
     document.getElementById('resOptViolation').className='res-option'+(selectedResolution==='violation'?' selected-violation':'');
     document.getElementById('resOptLeave').className='res-option'+(selectedResolution==='On Leave'?' selected-on-leave':'');
     document.getElementById('resOptIgnored').className='res-option'+(selectedResolution==='Ignored'?' selected-ignored':'');
-    // Show Full/Half Day sub-choice when Ignored is selected
+    document.getElementById('resOptWeekOff').className='res-option'+(selectedResolution==='Week Off'?' selected-weekoff':'');
+    // Show Full/Half Day sub-choice only when Ignored is selected
     const subChoice = document.getElementById('ignoredSubChoice');
     if(subChoice) subChoice.style.display = selectedResolution==='Ignored' ? 'block' : 'none';
-    if(selectedResolution==='Ignored') setIgnoredType(_ignoredType); // re-highlight selection
+    if(selectedResolution==='Ignored') setIgnoredType(_ignoredType);
 }
 
 function updateReasonLabel(){
-    document.getElementById('editReasonRequired').style.display=selectedResolution!=='violation'?'inline':'none';
+    // Reason required for On Leave and Ignored. Optional for Week Off.
+    const required = selectedResolution==='On Leave' || selectedResolution==='Ignored';
+    document.getElementById('editReasonRequired').style.display = required ? 'inline' : 'none';
 }
 
 async function saveEdit(){
     const reason = document.getElementById('editReason').value.trim();
     const ta = document.getElementById('editReason');
     ta.classList.remove('required-shake');
-    if(selectedResolution!=='violation' && !reason){
+    const reasonRequired = selectedResolution==='On Leave' || selectedResolution==='Ignored';
+    if(reasonRequired && !reason){
         void ta.offsetWidth; ta.classList.add('required-shake'); ta.focus(); return;
     }
 
@@ -1556,6 +1577,7 @@ async function saveEdit(){
 
     const label = savedResolution==='violation' ? 'reverted to Violation' :
                   savedResolution==='On Leave'  ? 'marked as On Leave'    :
+                  savedResolution==='Week Off'  ? 'marked as Week Off'    :
                   'marked as Ignored ('+(_ignoredType==='half'?'Half Day':'Full Day')+')';
     showToast('✅ ' + savedName + ' — ' + label + ' (synced to cloud)');
 }
@@ -1581,16 +1603,17 @@ function renderHistory(filters={}){
     if(team!=='all')           violations=violations.filter(v=>v.team===team);
     if(type==='active')        violations=violations.filter(v=>v.resolution==='violation');
     else if(type==='resolved') violations=violations.filter(v=>v.resolution!=='violation');
-    else if(type==='On Leave') violations=violations.filter(v=>v.resolution==='On Leave');
-    else if(type==='Ignored')  violations=violations.filter(v=>v.resolution==='Ignored');
-    else if(type==='Missing')  violations=violations.filter(v=>v.status==='Missing');
-    else if(type==='Incomplete')violations=violations.filter(v=>v.status==='Incomplete');
+    else if(type==='On Leave')  violations=violations.filter(v=>v.resolution==='On Leave');
+    else if(type==='Week Off')  violations=violations.filter(v=>v.resolution==='Week Off');
+    else if(type==='Ignored')   violations=violations.filter(v=>v.resolution==='Ignored');
+    else if(type==='Missing')   violations=violations.filter(v=>v.status==='Missing');
     if(from) violations=violations.filter(v=>v.date>=from);
     if(to)   violations=violations.filter(v=>v.date<=to);
 
     const active   =violations.filter(isActive).length;
     const resolved =violations.filter(v=>!isActive(v)).length;
     const onLeave  =violations.filter(v=>v.resolution==='On Leave').length;
+    const weekOff  =violations.filter(v=>v.resolution==='Week Off').length;
     const ignored  =violations.filter(v=>v.resolution==='Ignored').length;
     const uniqueEmp=new Set(violations.map(v=>v.name)).size;
     const uniqueDays=new Set(violations.map(v=>v.date)).size;
@@ -1600,6 +1623,7 @@ function renderHistory(filters={}){
         <div class="hist-stat"><div class="hv">${active}</div><div class="hl">Active Violations</div></div>
         <div class="hist-stat"><div class="hv" style="color:#27ae60">${resolved}</div><div class="hl">Resolved</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6c757d">${onLeave}</div><div class="hl">On Leave</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#8e44ad">${weekOff}</div><div class="hl">Week Off</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6f42c1">${ignored}</div><div class="hl">Ignored</div></div>
         <div class="hist-stat"><div class="hv" style="color:#e67e22">${uniqueEmp}</div><div class="hl">Employees</div></div>
         <div class="hist-stat"><div class="hv" style="color:#1a4d8c">${uniqueDays}</div><div class="hl">Days</div></div>`;
@@ -1633,8 +1657,9 @@ function renderHistory(filters={}){
                 :`viol-row-resolved-${res.toLowerCase().replace(' ','-')}`;
 
             let resBadge='';
-            if(res==='On Leave') resBadge=`<span class="res-badge res-leave">📅 On Leave</span>`;
-            else if(res==='Ignored') resBadge=`<span class="res-badge res-ignored">🔕 Ignored</span>`;
+            if(res==='On Leave')   resBadge=`<span class="res-badge res-leave">📅 On Leave</span>`;
+            else if(res==='Week Off') resBadge=`<span class="res-badge res-weekoff">🏖️ Week Off</span>`;
+            else if(res==='Ignored')  resBadge=`<span class="res-badge res-ignored">🔕 Ignored</span>`;
 
             const reasonHtml=v.reason?`<div class="res-reason">💬 ${esc(v.reason)}</div>`:'';
             const resolvedAtHtml=v.resolved_at?`<div class="res-reason">🕐 ${v.resolved_at}</div>`:'';
@@ -1702,10 +1727,10 @@ function exportHistoryCSV(filters={}){
     if(team!=='all')           violations=violations.filter(v=>v.team===team);
     if(type==='active')        violations=violations.filter(v=>v.resolution==='violation');
     else if(type==='resolved') violations=violations.filter(v=>v.resolution!=='violation');
-    else if(type==='On Leave') violations=violations.filter(v=>v.resolution==='On Leave');
-    else if(type==='Ignored')  violations=violations.filter(v=>v.resolution==='Ignored');
-    else if(type==='Missing')  violations=violations.filter(v=>v.status==='Missing');
-    else if(type==='Incomplete')violations=violations.filter(v=>v.status==='Incomplete');
+    else if(type==='On Leave')  violations=violations.filter(v=>v.resolution==='On Leave');
+    else if(type==='Week Off')  violations=violations.filter(v=>v.resolution==='Week Off');
+    else if(type==='Ignored')   violations=violations.filter(v=>v.resolution==='Ignored');
+    else if(type==='Missing')   violations=violations.filter(v=>v.status==='Missing');
     if(from)violations=violations.filter(v=>v.date>=from);
     if(to)  violations=violations.filter(v=>v.date<=to);
     if(!violations.length){showToast('No records to export.');return;}
@@ -1879,15 +1904,20 @@ function buildReport(msgs){
     });
     return Object.keys(state).sort().map(name=>{
         const s=state[name];const team=getTeam(name)||'annotation';
-        if(s.onLeave)return{name,team,login:'-',logout:'-',workingHours:'-',status:'On Leave',statusClass:'status-leave',icon:'📅'};
+        if(s.onLeave)return{name,team,login:'-',logout:'-',workingHours:'-',status:'On Leave',statusClass:'status-leave',icon:'📅',isViolation:false,shortHours:false};
         const login=s.logins.sort((a,b)=>(timeToMinutes(a)||0)-(timeToMinutes(b)||0))[0]||null;
         const logout=s.logouts.sort((a,b)=>(timeToMinutes(b)||0)-(timeToMinutes(a)||0))[0]||null;
+        // Auto Week Off: Annotation team on weekends with NO Slack data
+        const reportDate = document.getElementById('reportDate').value || new Date().toISOString().split('T')[0];
+        if(isAutoWeekOff(name, team, reportDate) && !login && !logout){
+            return{name,team,login:'-',logout:'-',workingHours:'-',status:'Week Off',statusClass:'status-leave',icon:'🏖️',isViolation:false,shortHours:false,autoWeekOff:true};
+        }
         let hours='-';
         if(login&&logout){const d=timeToMinutes(logout)-timeToMinutes(login);hours=((d<0?d+1440:d)/60).toFixed(2)+' hrs';}
         const result = getAttendanceStatus(login, logout, !!login, !!logout);
         return{name,team,login:login||'❌ No login',logout:logout||'❌ No logout',workingHours:hours,
                status:result.status,statusClass:result.statusClass,icon:result.icon,
-               isViolation:result.isViolation,shortHours:result.shortHours};
+               isViolation:result.isViolation,shortHours:result.shortHours,autoWeekOff:false};
     });
 }
 
@@ -2267,10 +2297,11 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
                 // Map resolution to attendance status
                 let attendStatus;
                 if(row.resolution==='On Leave')   attendStatus = 'On Leave';
+                else if(row.resolution==='Week Off') attendStatus = 'Week Off';
                 else if(row.resolution==='present') attendStatus = row.status==='On Leave'?'On Leave':
                     (()=>{
                         const a=timeToMinutes(row.login),b=timeToMinutes(row.logout);
-                        if(a!==null&&b!==null){ const h=((b<a?b+1440:b)-a)/60; return h>=6?'Full Day':'Half Day'; } // ≥6=Full, <6=Half
+                        if(a!==null&&b!==null){ const h=((b<a?b+1440:b)-a)/60; return h>=6?'Full Day':'Half Day'; }
                         return 'Full Day';
                     })();
                 else if(row.resolution==='Ignored'){
@@ -2363,6 +2394,10 @@ function renderAttendance(dateStr){
                     status: rep.status==='On Leave'?'On Leave': rep.status==='Missing'?'Not Recorded': rep.status,
                     login:cleanLogin, logout:cleanLogout, notes:'', source:'slack', id:null };
             }
+            // Auto Week Off for Annotation on weekends even in current-date path
+            if(isAutoWeekOff(e.name, e.team, dateStr)){
+                return { name:e.name, team:e.team, date:dateStr, status:'Week Off', login:'', logout:'', notes:'', source:'auto', id:null };
+            }
             return { name:e.name, team:e.team, date:dateStr, status:'Not Recorded', login:'', logout:'', notes:'', source:'slack', id:null };
         }
 
@@ -2372,14 +2407,13 @@ function renderAttendance(dateStr){
             // Map resolution → attendance status
             let status;
             if(viol.resolution==='On Leave')    status = 'On Leave';
+            else if(viol.resolution==='Week Off') status = 'Week Off';
             else if(viol.resolution==='Ignored'){
-                // Check reason prefix for [Half Day] or [Full Day]
                 status = (viol.reason||'').startsWith('[Half Day]') ? 'Half Day' : 'Full Day';
             }
             else if(viol.resolution==='present'){
-                // Compute from hours
                 const a=timeToMinutes(viol.login), b=timeToMinutes(viol.logout);
-                if(a!==null && b!==null){ const h=((b<a?b+1440:b)-a)/60; status=h>=6?'Full Day':'Half Day'; } // ≥6=Full, <6=Half
+                if(a!==null && b!==null){ const h=((b<a?b+1440:b)-a)/60; status=h>=6?'Full Day':'Half Day'; }
                 else status = 'Full Day';
             }
             else if(viol.resolution==='violation') status = viol.status==='Missing'?'Not Recorded':viol.status;
@@ -2390,6 +2424,10 @@ function renderAttendance(dateStr){
                 notes:'', source:'slack', id:null, resolution:viol.resolution };
         }
 
+        // Auto Week Off for Annotation team on weekends even with no data
+        if(isAutoWeekOff(e.name, e.team, dateStr)){
+            return { name:e.name, team:e.team, date:dateStr, status:'Week Off', login:'', logout:'', notes:'', source:'auto', id:null };
+        }
         return { name:e.name, team:e.team, date:dateStr, status:'Unknown', login:'', logout:'', notes:'', source:'slack', id:null };
     });
 
@@ -2402,6 +2440,11 @@ function renderAttendance(dateStr){
     const unknown    = merged.filter(r=>r.status==='Unknown').length;
 
     badge.textContent = formatDateWithDay(dateStr);
+    // Show weekend notice for Annotation team
+    const weekendNotice = document.getElementById('attendWeekendNotice');
+    if(weekendNotice){
+        weekendNotice.style.display = isWeekend(dateStr) ? 'block' : 'none';
+    }
     document.getElementById('attendSummary').innerHTML = `
         <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total</div></div>
         <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay + present}</div><div class="al">✅ Full Day</div></div>
@@ -2415,19 +2458,21 @@ function renderAttendance(dateStr){
         const rowClass = r.status==='Full Day'      ?'attend-fullday':
                          r.status==='Present'       ?'attend-present':
                          r.status==='Half Day'      ?'attend-halfday':
+                         r.status==='Week Off'      ?'attend-weekoff':
                          r.status==='On Leave'      ?'attend-leave':
                          r.status==='Not Recorded'  ?'attend-leave':'';
         const badgeCls = r.status==='Full Day'      ?'ab-fullday':
                          r.status==='Present'       ?'ab-present':
                          r.status==='Half Day'      ?'ab-halfday':
+                         r.status==='Week Off'      ?'ab-weekoff':
                          r.status==='On Leave'      ?'ab-leave':
                          r.status==='Not Recorded'  ?'ab-leave':'ab-leave';
         const manualBadge = r.source === 'manual' ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
         const teamBadge   = `<span class="team-badge ${r.team}">${r.team==='annotation'?'Annotation':'Assessment'}</span>`;
         const hours       = calcWorkingHours(r.login, r.logout);
         const short       = r.status==='Full Day' && isShortHours(r.login, r.logout);
-        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Unknown')?'—':'❌ Missing';
-        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Unknown')?'—':'❌ Missing';
+        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
+        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
         // Store row data in a global map keyed by safe index — avoids ALL quote issues in onclick
         const rowKey = 'ar_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         window._attendRowMap = window._attendRowMap || {};
@@ -3089,6 +3134,7 @@ function renderEmpHistory(){
         <div class="hist-stat"><div class="hv" style="color:#dc3545">${active}</div><div class="hl">Violations</div></div>
         <div class="hist-stat"><div class="hv" style="color:#27ae60">${present}</div><div class="hl">Present</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6c757d">${onLeave}</div><div class="hl">On Leave</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#8e44ad">${weekOff}</div><div class="hl">Week Off</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6f42c1">${ignored}</div><div class="hl">Ignored</div></div>`;
 
     // Group by employee
@@ -3106,8 +3152,9 @@ function renderEmpHistory(){
             const res = v.resolution||'violation';
             let resBadge = res==='violation'
                 ? `<span class="status-badge status-${v.status.toLowerCase()}">${v.status==='Missing'?'❓':'⚠️'} ${v.status}</span>`
-                : res==='On Leave' ? `<span class="res-badge res-leave">📅 On Leave</span>`
-                : res==='Ignored'  ? `<span class="res-badge res-ignored">🔕 Ignored</span>`
+                : res==='On Leave'  ? `<span class="res-badge res-leave">📅 On Leave</span>`
+                : res==='Week Off'  ? `<span class="res-badge res-weekoff">🏖️ Week Off</span>`
+                : res==='Ignored'   ? `<span class="res-badge res-ignored">🔕 Ignored</span>`
                 : `<span class="res-badge" style="background:#d4edda;color:#155724;">✅ Present</span>`;
             return `<tr>
                 <td>${formatDate(v.date)} <span style="color:#aaa;font-size:11px;">${getDayName(v.date).slice(0,3)}</span></td>
