@@ -249,6 +249,10 @@
         .res-badge.res-menstrual{background:#fce4ec;color:#880e4f;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
         .btn-quick.bq-menstrual{background:#fce4ec;color:#880e4f;}
         .quick-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+        .btn-excuse{border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;background:#d4edda;color:#155724;white-space:nowrap;transition:opacity .15s;}
+        .btn-excuse:hover{opacity:.82;}
+        .short-excused-badge{display:inline-flex;align-items:center;gap:3px;background:#d4edda;color:#155724;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:600;}
+        .short-hours-cell{display:flex;align-items:center;gap:5px;}
         .bulk-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;background:#fff8e1;border:1.5px solid #ffe082;border-radius:10px;padding:10px 14px;margin-bottom:12px;}
         .bulk-bar.visible{display:flex;}
         .bulk-bar-label{font-size:13px;font-weight:700;color:#555;white-space:nowrap;}
@@ -422,6 +426,8 @@
         body.dark .btn-bulk.bb-weekoff{background:#2a1a44;color:#c9a8ff;}
         body.dark .btn-bulk.bb-maternity{background:#3b0a1e;color:#f48fb1;}
         body.dark .btn-bulk.bb-menstrual{background:#3b0a1e;color:#f48fb1;}
+        body.dark .btn-excuse{background:#0d2b12;color:#81c784;}
+        body.dark .short-excused-badge{background:#0d2b12;color:#81c784;}
         body.dark .monthly-cal-wrap{background:#1e2130;}
         body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
         body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
@@ -572,7 +578,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.2</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.3</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1674,6 +1680,27 @@ function closeEditModal(){ document.getElementById('editOverlay').classList.remo
 // ══════════════════════════════════════════════════════════════
 //  QUICK RESOLVE — single-click action from violation row
 // ══════════════════════════════════════════════════════════════
+async function excuseShortHours(date, name){
+    const reason = prompt(`Reason for excusing short hours for ${name} on ${formatDate(date)}:
+(leave blank to just mark as excused)`);
+    if(reason === null) return; // cancelled
+    const tag = '[Short Hours Excused] ' + (reason.trim() || 'Permission granted');
+    // Find the dbRow and update its reason field — keep existing resolution (present)
+    const row = dbRows.find(r=>r.name===name && r.date===date);
+    if(!row){ showToast('⚠️ No record found in DB for this employee on this date. Process the date first.'); return; }
+    await saveResolutionToCloud(date, name, row.resolution || 'present', tag);
+    showToast(`✅ Short hours excused for ${name}`);
+}
+
+async function unexcuseShortHours(date, name){
+    // Remove the excused tag — keep resolution, clear reason
+    const row = dbRows.find(r=>r.name===name && r.date===date);
+    if(!row) return;
+    const newReason = (row.reason||'').replace(/\[Short Hours Excused\][^\]]*\]?[^[).]*/g,'').trim();
+    await saveResolutionToCloud(date, name, row.resolution || 'present', newReason);
+    showToast(`↩️ Short hours excuse removed for ${name}`);
+}
+
 async function quickResolve(date, name, resolution, reason){
     await saveResolutionToCloud(date, name, resolution, reason);
     const labels = {
@@ -2443,6 +2470,12 @@ function isShortHours(login, logout){
     return h >= 6 && h < 8.9;
 }
 
+function isShortHoursExcused(name, dateStr){
+    // Check dbRows for [Short Hours Excused] reason tag
+    const row = dbRows.find(r=>r.name===name && r.date===dateStr);
+    return row && (row.reason||'').includes('[Short Hours Excused]');
+}
+
 // Show all attendance records across all dates for a single employee
 async function renderEmployeeHistory(empName, fromDate='', toDate=''){
     const content = document.getElementById('attendContent');
@@ -2626,7 +2659,7 @@ function renderAttendance(dateStr){
     const menstrual  = merged.filter(r=>r.status==='Menstrual').length;
     const leaveTotal = onLeave + maternity + menstrual; // all leave types together
     const weekOff    = merged.filter(r=>r.status==='Week Off').length;
-    const shortHrs   = merged.filter(r=>r.status==='Full Day' && isShortHours(r.login, r.logout)).length;
+    const shortHrs   = merged.filter(r=>r.status==='Full Day' && isShortHours(r.login,r.logout) && !isShortHoursExcused(r.name, r.date||dateStr)).length;
     const unknown    = merged.filter(r=>r.status==='Unknown').length;
 
     badge.textContent = formatDateWithDay(dateStr);
@@ -2659,7 +2692,7 @@ function renderAttendance(dateStr){
     // Sort priority: Not Recorded > Short Hours (Full Day <8.9) > On Leave group > Half Day > Full Day > Week Off > Unknown
     const sortPriority = r => {
         if(r.status==='Not Recorded')                                       return 0;
-        if(r.status==='Full Day' && isShortHours(r.login, r.logout))        return 1;
+        if(r.status==='Full Day' && isShortHours(r.login,r.logout) && !isShortHoursExcused(r.name, r.date||dateStr)) return 1;
         if(r.status==='On Leave')                                           return 2;
         if(r.status==='Maternity')                                          return 3;
         if(r.status==='Menstrual')                                          return 4;
@@ -2696,7 +2729,19 @@ function renderAttendance(dateStr){
         // Store row data in a global map keyed by safe index — avoids ALL quote issues in onclick
         const rowKey = 'ar_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         window._attendRowMap = window._attendRowMap || {};
-        window._attendRowMap[rowKey] = {id:r.id||null,name:r.name,status:r.status,login:r.login||'',logout:r.logout||'',notes:r.notes||''};
+        window._attendRowMap[rowKey] = {id:r.id||null,name:r.name,date:r.date||dateStr,status:r.status,login:r.login||'',logout:r.logout||'',notes:r.notes||''};
+        const excused   = short && isShortHoursExcused(r.name, r.date||dateStr);
+        const excuseBtn = short && !excused
+            ? `<button class="btn-excuse" onclick="excuseShortHours('${r.date||dateStr}','${r.name.replace(/'/g,"\'")}')">✅ Excuse</button>`
+            : '';
+        const unexcuseBtn = excused
+            ? `<button class="btn-excuse" style="background:#fff3cd;color:#856404;" onclick="unexcuseShortHours('${r.date||dateStr}','${r.name.replace(/'/g,"\'")}')">↩️ Remove</button>`
+            : '';
+        const hoursDisplay = short && !excused
+            ? `<strong style="color:#e67e22;">${hours}</strong><span title="Below 8.90 hrs — click Excuse if permitted" style="color:#e67e22;font-size:10px;margin-left:3px;">⚠️</span>`
+            : excused
+            ? `<strong style="color:#27ae60;">${hours}</strong><span class="short-excused-badge">✅ Excused</span>`
+            : `<strong style="color:#27ae60;">${hours}</strong>`;
 
         return `<tr class="${rowClass}">
             <td><strong>${esc(r.name)}</strong>${manualBadge}</td>
@@ -2704,7 +2749,7 @@ function renderAttendance(dateStr){
             <td><span class="attend-badge ${badgeCls}">${r.status}</span></td>
             <td><span class="time-badge">${loginTxt}</span></td>
             <td><span class="time-badge">${logoutTxt}</span></td>
-            <td><strong style="${short?'color:#e67e22;':'color:#27ae60;'}">${hours}</strong>${short?'<span title="Below 8.90 hrs" style="color:#e67e22;font-size:10px;margin-left:3px;">⚠️</span>':''}</td>
+            <td><div class="short-hours-cell">${hoursDisplay}${excuseBtn}${unexcuseBtn}</div></td>
             <td>${r.notes
                 ? '<span class="attend-note-chip">📝 '+esc(r.notes)+'</span>'
                 : '<span class="attend-note-empty">—</span>'}</td>
