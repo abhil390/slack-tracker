@@ -578,7 +578,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.5</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.6</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -2059,20 +2059,32 @@ function closeConfirm(){document.getElementById('confirmOverlay').classList.remo
 function parseMessages(rawText){
     clearDebug();addDebug('=== Parsing ===');
 
-    // ── Pre-pass: split lines that have a header embedded mid-line ──
-    // e.g. "Remarks: ...reportJobin Johnson  [8:03 AM]" → split before the name+time
-    // Matches: text followed by 2+ spaces, then a Name [H:MM AM] at end of string
-    const embeddedHeaderRe = /^(.+?)\s{2,}([A-Za-z][^\[\]\n:•]{2,}?)\s{2,}\[(\d{1,2}:\d{2}\s*[AP]M)\]\s*$/i;
-    const rawLines = rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-    const splitLines = [];
+    // ── Build employee-aware split regex ──
+    // Detects lines where a known employee name+time is embedded after non-name content
+    // e.g. "Remarks: NilJobin Johnson  [8:03 AM]" → split into two lines
+    function buildEmpSplitRe(){
+        const sorted=[...allEmployees()].sort((a,b)=>b.length-a.length);
+        const esc=sorted.map(e=>e.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+        return new RegExp('^(.+?)('+esc.join('|')+')\\s{1,4}\\[(\\d{1,2}:\\d{2}\\s*[AP]M)\\]\\s*$','i');
+    }
+
+    const rawLines=rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const empSplitRe=buildEmpSplitRe();
+    const splitLines=[];
     for(const rawLine of rawLines){
-        // Check if this line looks like a concatenation: has non-header prefix + embedded header
-        const em = rawLine.match(embeddedHeaderRe);
-        if(em && em[1].trim() && /[a-z]/i.test(em[2]) && !em[1].trim().match(/^[A-Za-z][^:•]{0,40}$/)){
-            // Split: push prefix as body line, then push the header part as its own line
-            splitLines.push(em[1].trim());
-            splitLines.push(em[2].trim() + '  [' + em[3] + ']');
-            addDebug('Split line: ' + rawLine.substring(0,60));
+        const m=rawLine.match(empSplitRe);
+        if(m){
+            // Only split if prefix clearly isn't a real employee name
+            // (contains : or . or digits or is long)
+            const prefix=m[1].trim();
+            const hasJunk=/[:•\.\d]/.test(prefix)||prefix.length>35||/[a-z]{4,}/.test((prefix.split(/\s+/)[0]||''));
+            if(hasJunk){
+                splitLines.push(prefix);
+                splitLines.push(m[2].trim()+'  ['+m[3]+']');
+                addDebug('Pre-split: '+rawLine.substring(0,60));
+            } else {
+                splitLines.push(rawLine);
+            }
         } else {
             splitLines.push(rawLine);
         }
