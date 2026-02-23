@@ -2635,11 +2635,23 @@ function renderAttendance(dateStr){
     if(weekendNotice){
         weekendNotice.style.display = isWeekend(dateStr) ? 'block' : 'none';
     }
+    // Build On Leave tooltip breakdown
+    const leaveBreakdown = [
+        onLeave   ? onLeave+' On Leave'     : '',
+        maternity ? maternity+' Maternity'  : '',
+        menstrual ? menstrual+' Menstrual'  : ''
+    ].filter(Boolean).join(' · ') || '—';
     document.getElementById('attendSummary').innerHTML = `
         <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total</div></div>
-        <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay + present}</div><div class="al">✅ Full Day</div></div>
+        <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay}</div><div class="al">✅ Full Day</div></div>
+        <div class="attend-stat"><div class="av" style="color:#e67e22">${shortHrs}</div><div class="al">⚠️ Short Hours</div></div>
         <div class="attend-stat"><div class="av" style="color:#e67e22">${halfDay}</div><div class="al">🌓 Half Day</div></div>
-        <div class="attend-stat"><div class="av" style="color:#6c757d">${onLeave}</div><div class="al">📅 On Leave</div></div>
+        <div class="attend-stat"><div class="av" style="color:#dc3545">${notRec}</div><div class="al">❓ Not Recorded</div></div>
+        <div class="attend-stat" title="${leaveBreakdown}" style="cursor:help;">
+            <div class="av" style="color:#dc3545">${leaveTotal}</div>
+            <div class="al">📅 On Leave <span style="font-size:9px;color:#aaa;">(incl. Mat/Men)</span></div>
+        </div>
+        <div class="attend-stat"><div class="av" style="color:#8e44ad">${weekOff}</div><div class="al">🏖️ Week Off</div></div>
         <div class="attend-stat"><div class="av" style="color:#aaa">${unknown}</div><div class="al">❓ No Data</div></div>`;
 
     if(!merged.length){ content.innerHTML='<div class="no-attend">No employees found.</div>'; return; }
