@@ -578,7 +578,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.4</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -769,7 +769,7 @@
                     </div>
                 </div>
                 <div class="history-summary" id="empHistSummary"></div>
-                <div id="empHistContent"><div class="no-history">Search for an employee or apply filters to view history.</div></div>
+                <div id="empHistContent"><div class="no-history">Loading violation history…</div></div>
             </div>
         </div>
     </div>
@@ -3304,6 +3304,11 @@ function switchHistTab(tab){
         // Hide bulk bar when switching away
         const bar = document.getElementById('bulkBar');
         if(bar) bar.classList.remove('visible');
+        // Auto-load: show all employees with violations (no specific employee filter)
+        // Only auto-load if no employee is currently selected
+        if(!_empHistSelected){
+            document.getElementById('empHistType').value = 'violation';
+        }
         renderEmpHistory();
     }
 }
@@ -3400,18 +3405,27 @@ function renderEmpHistory(){
 
     if(!rows.length){
         summary.innerHTML='';
-        content.innerHTML='<div class="no-history">No records match the filters.</div>';
+        const msg = type==='violation'
+            ? '🎉 No active violations found! All employees are compliant.'
+            : 'No records match the current filters.';
+        content.innerHTML=`<div class="no-history">${msg}</div>`;
         return;
     }
 
-    const active   = rows.filter(r=>r.resolution==='violation').length;
-    const onLeave  = rows.filter(r=>r.resolution==='On Leave').length;
-    const ignored  = rows.filter(r=>r.resolution==='Ignored').length;
-    const present  = rows.filter(r=>r.resolution==='present').length;
+    const active    = rows.filter(r=>r.resolution==='violation').length;
+    const onLeave   = rows.filter(r=>r.resolution==='On Leave').length;
+    const maternity = rows.filter(r=>r.resolution==='Maternity').length;
+    const menstrual = rows.filter(r=>r.resolution==='Menstrual').length;
+    const weekOff   = rows.filter(r=>r.resolution==='Week Off').length;
+    const ignored   = rows.filter(r=>r.resolution==='Ignored').length;
+    const present   = rows.filter(r=>r.resolution==='present').length;
+    const empCount  = Object.keys((() => { const m={}; rows.forEach(r=>m[r.name]=1); return m; })()).length;
+    const violEmpCount = Object.keys((() => { const m={}; rows.filter(r=>r.resolution==='violation').forEach(r=>m[r.name]=1); return m; })()).length;
 
     summary.innerHTML = `
-        <div class="hist-stat"><div class="hv">${rows.length}</div><div class="hl">Total</div></div>
-        <div class="hist-stat"><div class="hv" style="color:#dc3545">${active}</div><div class="hl">Violations</div></div>
+        <div class="hist-stat"><div class="hv">${empCount}</div><div class="hl">Employees</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#dc3545">${violEmpCount}</div><div class="hl">With Violations</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#dc3545">${active}</div><div class="hl">Total Violations</div></div>
         <div class="hist-stat"><div class="hv" style="color:#27ae60">${present}</div><div class="hl">Present</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6c757d">${onLeave}</div><div class="hl">On Leave</div></div>
         <div class="hist-stat"><div class="hv" style="color:#ad1457">${maternity}</div><div class="hl">Maternity</div></div>
@@ -3449,6 +3463,8 @@ function renderEmpHistory(){
                 <td><button class="btn btn-xs btn-secondary" onclick="openEditModal('${v.date}','${v.name.replace(/'/g,"\'")}')">✏️ Edit</button></td>
             </tr>`;
         }).join('');
+        // Auto-expand: always open when violations filter, or when employee has active violations
+        const autoOpen = type==='violation' || activeV > 0;
         return `<div class="hist-emp-block">
             <div class="hist-emp-header" onclick="toggleHistBlock('ehb${i}')">
                 <div style="display:flex;align-items:center;gap:10px;">${esc(e.name)} ${teamBadge}</div>
@@ -3459,7 +3475,7 @@ function renderEmpHistory(){
                     <span style="color:#aaa;font-size:13px;margin-left:6px;">▼</span>
                 </div>
             </div>
-            <div class="hist-emp-body" id="ehb${i}">
+            <div class="hist-emp-body ${autoOpen?'open':''}" id="ehb${i}">
                 <table class="hist-table"><thead><tr>
                     <th>Date</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th><th>Action</th>
                 </tr></thead><tbody>${rowsHtml}</tbody></table>
