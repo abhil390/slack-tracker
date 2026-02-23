@@ -241,6 +241,21 @@
         .ab-incomplete{background:#fff3cd;color:#856404;}
         .ab-absent{background:#f8d7da;color:#721c24;}
         .ab-leave{background:#f8d7da;color:#721c24;}
+        .ab-maternity{background:#f8d7da;color:#721c24;}
+        .attend-maternity td:first-child{border-left:4px solid #dc3545;}
+        .res-badge.res-maternity{background:#fce4ec;color:#ad1457;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
+        .ab-menstrual{background:#f8d7da;color:#721c24;}
+        .attend-menstrual td:first-child{border-left:4px solid #dc3545;}
+        .res-badge.res-menstrual{background:#fce4ec;color:#880e4f;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
+        .btn-quick.bq-menstrual{background:#fce4ec;color:#880e4f;}
+        .quick-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+        .btn-quick{border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity .15s;}
+        .btn-quick:hover{opacity:.82;}
+        .btn-quick.bq-leave{background:#f8d7da;color:#721c24;}
+        .btn-quick.bq-ignore-full{background:#d4edda;color:#155724;}
+        .btn-quick.bq-ignore-half{background:#fff3cd;color:#856404;}
+        .btn-quick.bq-weekoff{background:#e8d5ff;color:#5a32a3;}
+        .btn-quick.bq-maternity{background:#fce4ec;color:#ad1457;}
         .ab-weekoff{background:#e8d5ff;color:#5a32a3;}
         .attend-weekoff td:first-child{border-left:4px solid #8e44ad;}
         .res-badge.res-weekoff{background:#e8d5ff;color:#5a32a3;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
@@ -371,6 +386,18 @@
         body.dark .ab-weekoff{background:#2a1a44;color:#c9a8ff;}
         body.dark .attend-weekoff td:first-child{border-left-color:#8e44ad;}
         body.dark .res-badge.res-weekoff{background:#2a1a44;color:#c9a8ff;}
+        body.dark .ab-maternity{background:#3b0a1e;color:#f48fb1;}
+        body.dark .attend-maternity td:first-child{border-left-color:#dc3545;}
+        body.dark .res-badge.res-maternity{background:#3b0a1e;color:#f48fb1;}
+        body.dark .btn-quick.bq-leave{background:#3b1520;color:#f48fb1;}
+        body.dark .btn-quick.bq-ignore-full{background:#0d2b12;color:#81c784;}
+        body.dark .btn-quick.bq-ignore-half{background:#2e2000;color:#ffd54f;}
+        body.dark .btn-quick.bq-weekoff{background:#2a1a44;color:#c9a8ff;}
+        body.dark .btn-quick.bq-maternity{background:#3b0a1e;color:#f48fb1;}
+        body.dark .ab-menstrual{background:#3b0a1e;color:#f48fb1;}
+        body.dark .attend-menstrual td:first-child{border-left-color:#dc3545;}
+        body.dark .res-badge.res-menstrual{background:#3b0a1e;color:#f48fb1;}
+        body.dark .btn-quick.bq-menstrual{background:#3b0a1e;color:#f48fb1;}
         body.dark .monthly-cal-wrap{background:#1e2130;}
         body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
         body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
@@ -521,7 +548,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.8</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.0</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -859,6 +886,16 @@
                     <div class="res-icon">🏖️</div>
                     <div class="res-label">Mark as Week Off</div>
                     <div class="res-desc">Scheduled day off for this employee</div>
+                </div>
+                <div class="res-option" data-res="Maternity" id="resOptMaternity">
+                    <div class="res-icon">🤱</div>
+                    <div class="res-label">Maternity Leave</div>
+                    <div class="res-desc">Shows same as On Leave in attendance</div>
+                </div>
+                <div class="res-option" data-res="Menstrual" id="resOptMenstrual">
+                    <div class="res-icon">🌸</div>
+                    <div class="res-label">Menstrual Leave</div>
+                    <div class="res-desc">Shows same as On Leave in attendance</div>
                 </div>
             </div>
             <!-- Ignored sub-choice: Full Day or Half Day -->
@@ -1410,9 +1447,11 @@ async function saveResolutionToCloud(date, name, resolution, reason){
             renderAttendance(attendCurrentDate);
         }
 
-        const label = resolution === 'violation' ? 'Reverted to Violation' :
-                      resolution === 'On Leave'  ? 'Marked as On Leave'    :
-                      resolution === 'Week Off'  ? 'Marked as Week Off'    : 'Marked as Ignored';
+        const label = resolution === 'violation'  ? 'Reverted to Violation'     :
+                      resolution === 'On Leave'   ? 'Marked as On Leave'        :
+                      resolution === 'Week Off'   ? 'Marked as Week Off'        :
+                      resolution === 'Maternity'  ? 'Marked as Maternity Leave' :
+                      resolution === 'Menstrual'  ? 'Marked as Menstrual Leave' : 'Marked as Ignored';
         setSyncStatus('ok', '✅ ' + label + ' for ' + name + ' — saved & synced.');
 
         // STEP 6: NO background reload — cache is already correct.
@@ -1545,6 +1584,8 @@ function updateResOptions(){
     document.getElementById('resOptLeave').className='res-option'+(selectedResolution==='On Leave'?' selected-on-leave':'');
     document.getElementById('resOptIgnored').className='res-option'+(selectedResolution==='Ignored'?' selected-ignored':'');
     document.getElementById('resOptWeekOff').className='res-option'+(selectedResolution==='Week Off'?' selected-weekoff':'');
+    document.getElementById('resOptMaternity').className='res-option'+(selectedResolution==='Maternity'?' selected-on-leave':'');
+    document.getElementById('resOptMenstrual').className='res-option'+(selectedResolution==='Menstrual'?' selected-on-leave':'');
     // Show Full/Half Day sub-choice only when Ignored is selected
     const subChoice = document.getElementById('ignoredSubChoice');
     if(subChoice) subChoice.style.display = selectedResolution==='Ignored' ? 'block' : 'none';
@@ -1562,6 +1603,7 @@ async function saveEdit(){
     const ta = document.getElementById('editReason');
     ta.classList.remove('required-shake');
     const reasonRequired = selectedResolution==='On Leave' || selectedResolution==='Ignored';
+    // Maternity & Week Off: reason optional
     if(reasonRequired && !reason){
         void ta.offsetWidth; ta.classList.add('required-shake'); ta.focus(); return;
     }
@@ -1579,14 +1621,28 @@ async function saveEdit(){
         : reason;
     await saveResolutionToCloud(savedDate, savedName, savedResolution, finalReason);
 
-    const label = savedResolution==='violation' ? 'reverted to Violation' :
-                  savedResolution==='On Leave'  ? 'marked as On Leave'    :
-                  savedResolution==='Week Off'  ? 'marked as Week Off'    :
+    const label = savedResolution==='violation'  ? 'reverted to Violation' :
+                  savedResolution==='On Leave'   ? 'marked as On Leave'    :
+                  savedResolution==='Week Off'   ? 'marked as Week Off'    :
+                  savedResolution==='Maternity'  ? 'marked as Maternity Leave' :
+                  savedResolution==='Menstrual'  ? 'marked as Menstrual Leave' :
                   'marked as Ignored ('+(_ignoredType==='half'?'Half Day':'Full Day')+')';
     showToast('✅ ' + savedName + ' — ' + label + ' (synced to cloud)');
 }
 
 function closeEditModal(){ document.getElementById('editOverlay').classList.remove('open'); editContext=null; }
+
+// ══════════════════════════════════════════════════════════════
+//  QUICK RESOLVE — single-click action from violation row
+// ══════════════════════════════════════════════════════════════
+async function quickResolve(date, name, resolution, reason){
+    await saveResolutionToCloud(date, name, resolution, reason);
+    const labels = {
+        'On Leave':'📅 On Leave','Maternity':'🤱 Maternity Leave',
+        'Menstrual':'🌸 Menstrual Leave','Week Off':'🏖️ Week Off','Ignored':'🔕 Ignored'
+    };
+    showToast(`✅ ${name} → ${labels[resolution]||resolution}`);
+}
 
 // ══════════════════════════════════════════════════════════════
 //  HISTORY RENDER
@@ -1617,6 +1673,8 @@ function renderHistory(filters={}){
     const active   =violations.filter(isActive).length;
     const resolved =violations.filter(v=>!isActive(v)).length;
     const onLeave  =violations.filter(v=>v.resolution==='On Leave').length;
+    const maternity=violations.filter(v=>v.resolution==='Maternity').length;
+    const menstrual=violations.filter(v=>v.resolution==='Menstrual').length;
     const weekOff  =violations.filter(v=>v.resolution==='Week Off').length;
     const ignored  =violations.filter(v=>v.resolution==='Ignored').length;
     const uniqueEmp=new Set(violations.map(v=>v.name)).size;
@@ -1627,6 +1685,8 @@ function renderHistory(filters={}){
         <div class="hist-stat"><div class="hv">${active}</div><div class="hl">Active Violations</div></div>
         <div class="hist-stat"><div class="hv" style="color:#27ae60">${resolved}</div><div class="hl">Resolved</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6c757d">${onLeave}</div><div class="hl">On Leave</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#ad1457">${maternity}</div><div class="hl">Maternity</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#880e4f">${menstrual}</div><div class="hl">Menstrual</div></div>
         <div class="hist-stat"><div class="hv" style="color:#8e44ad">${weekOff}</div><div class="hl">Week Off</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6f42c1">${ignored}</div><div class="hl">Ignored</div></div>
         <div class="hist-stat"><div class="hv" style="color:#e67e22">${uniqueEmp}</div><div class="hl">Employees</div></div>
@@ -1661,9 +1721,11 @@ function renderHistory(filters={}){
                 :`viol-row-resolved-${res.toLowerCase().replace(' ','-')}`;
 
             let resBadge='';
-            if(res==='On Leave')   resBadge=`<span class="res-badge res-leave">📅 On Leave</span>`;
-            else if(res==='Week Off') resBadge=`<span class="res-badge res-weekoff">🏖️ Week Off</span>`;
-            else if(res==='Ignored')  resBadge=`<span class="res-badge res-ignored">🔕 Ignored</span>`;
+            if(res==='On Leave')     resBadge=`<span class="res-badge res-leave">📅 On Leave</span>`;
+            else if(res==='Maternity')  resBadge=`<span class="res-badge res-maternity">🤱 Maternity</span>`;
+            else if(res==='Menstrual')  resBadge=`<span class="res-badge res-menstrual">🌸 Menstrual</span>`;
+            else if(res==='Week Off')   resBadge=`<span class="res-badge res-weekoff">🏖️ Week Off</span>`;
+            else if(res==='Ignored')    resBadge=`<span class="res-badge res-ignored">🔕 Ignored</span>`;
 
             const reasonHtml=v.reason?`<div class="res-reason">💬 ${esc(v.reason)}</div>`:'';
             const resolvedAtHtml=v.resolved_at?`<div class="res-reason">🕐 ${v.resolved_at}</div>`:'';
@@ -2310,8 +2372,10 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
             if(row){
                 // Map resolution to attendance status
                 let attendStatus;
-                if(row.resolution==='On Leave')   attendStatus = 'On Leave';
-                else if(row.resolution==='Week Off') attendStatus = 'Week Off';
+                if(row.resolution==='On Leave')     attendStatus = 'On Leave';
+                else if(row.resolution==='Maternity')  attendStatus = 'Maternity';
+                else if(row.resolution==='Menstrual')  attendStatus = 'Menstrual';
+                else if(row.resolution==='Week Off')   attendStatus = 'Week Off';
                 else if(row.resolution==='present') attendStatus = row.status==='On Leave'?'On Leave':
                     (()=>{
                         const a=timeToMinutes(row.login),b=timeToMinutes(row.logout);
@@ -2421,6 +2485,8 @@ function renderAttendance(dateStr){
             // Map resolution → attendance status
             let status;
             if(viol.resolution==='On Leave')    status = 'On Leave';
+            else if(viol.resolution==='Maternity')  status = 'Maternity';
+            else if(viol.resolution==='Menstrual')  status = 'Menstrual';
             else if(viol.resolution==='Week Off') status = 'Week Off';
             else if(viol.resolution==='Ignored'){
                 status = (viol.reason||'').startsWith('[Half Day]') ? 'Half Day' : 'Full Day';
@@ -2473,20 +2539,24 @@ function renderAttendance(dateStr){
                          r.status==='Present'       ?'attend-present':
                          r.status==='Half Day'      ?'attend-halfday':
                          r.status==='Week Off'      ?'attend-weekoff':
+                         r.status==='Maternity'     ?'attend-maternity':
+                         r.status==='Menstrual'     ?'attend-menstrual':
                          r.status==='On Leave'      ?'attend-leave':
                          r.status==='Not Recorded'  ?'attend-leave':'';
         const badgeCls = r.status==='Full Day'      ?'ab-fullday':
                          r.status==='Present'       ?'ab-present':
                          r.status==='Half Day'      ?'ab-halfday':
                          r.status==='Week Off'      ?'ab-weekoff':
+                         r.status==='Maternity'     ?'ab-maternity':
+                         r.status==='Menstrual'     ?'ab-menstrual':
                          r.status==='On Leave'      ?'ab-leave':
                          r.status==='Not Recorded'  ?'ab-leave':'ab-leave';
         const manualBadge = r.source === 'manual' ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
         const teamBadge   = `<span class="team-badge ${r.team}">${r.team==='annotation'?'Annotation':'Assessment'}</span>`;
         const hours       = calcWorkingHours(r.login, r.logout);
         const short       = r.status==='Full Day' && isShortHours(r.login, r.logout);
-        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
-        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
+        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Maternity'||r.status==='Menstrual'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
+        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Maternity'||r.status==='Menstrual'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
         // Store row data in a global map keyed by safe index — avoids ALL quote issues in onclick
         const rowKey = 'ar_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         window._attendRowMap = window._attendRowMap || {};
@@ -3161,6 +3231,8 @@ function renderEmpHistory(){
         <div class="hist-stat"><div class="hv" style="color:#dc3545">${active}</div><div class="hl">Violations</div></div>
         <div class="hist-stat"><div class="hv" style="color:#27ae60">${present}</div><div class="hl">Present</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6c757d">${onLeave}</div><div class="hl">On Leave</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#ad1457">${maternity}</div><div class="hl">Maternity</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#880e4f">${menstrual}</div><div class="hl">Menstrual</div></div>
         <div class="hist-stat"><div class="hv" style="color:#8e44ad">${weekOff}</div><div class="hl">Week Off</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6f42c1">${ignored}</div><div class="hl">Ignored</div></div>`;
 
@@ -3180,6 +3252,8 @@ function renderEmpHistory(){
             let resBadge = res==='violation'
                 ? `<span class="status-badge status-${v.status.toLowerCase()}">${v.status==='Missing'?'❓':'⚠️'} ${v.status}</span>`
                 : res==='On Leave'  ? `<span class="res-badge res-leave">📅 On Leave</span>`
+                : res==='Maternity' ? `<span class="res-badge res-maternity">🤱 Maternity</span>`
+                : res==='Menstrual' ? `<span class="res-badge res-menstrual">🌸 Menstrual</span>`
                 : res==='Week Off'  ? `<span class="res-badge res-weekoff">🏖️ Week Off</span>`
                 : res==='Ignored'   ? `<span class="res-badge res-ignored">🔕 Ignored</span>`
                 : `<span class="res-badge" style="background:#d4edda;color:#155724;">✅ Present</span>`;
