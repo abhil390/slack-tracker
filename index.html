@@ -572,7 +572,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.1</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.2</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -2619,11 +2619,14 @@ function renderAttendance(dateStr){
     });
 
     const fullDay    = merged.filter(r=>r.status==='Full Day'||r.status==='Present').length;
-    const present    = 0; // merged into fullDay
     const halfDay    = merged.filter(r=>r.status==='Half Day').length;
-    const incomplete = merged.filter(r=>r.status==='Incomplete').length;
-    const absent     = merged.filter(r=>r.status==='Absent').length;
+    const notRec     = merged.filter(r=>r.status==='Not Recorded').length;
     const onLeave    = merged.filter(r=>r.status==='On Leave').length;
+    const maternity  = merged.filter(r=>r.status==='Maternity').length;
+    const menstrual  = merged.filter(r=>r.status==='Menstrual').length;
+    const leaveTotal = onLeave + maternity + menstrual; // all leave types together
+    const weekOff    = merged.filter(r=>r.status==='Week Off').length;
+    const shortHrs   = merged.filter(r=>r.status==='Full Day' && isShortHours(r.login, r.logout)).length;
     const unknown    = merged.filter(r=>r.status==='Unknown').length;
 
     badge.textContent = formatDateWithDay(dateStr);
@@ -2640,6 +2643,20 @@ function renderAttendance(dateStr){
         <div class="attend-stat"><div class="av" style="color:#aaa">${unknown}</div><div class="al">❓ No Data</div></div>`;
 
     if(!merged.length){ content.innerHTML='<div class="no-attend">No employees found.</div>'; return; }
+
+    // Sort priority: Not Recorded > Short Hours (Full Day <8.9) > On Leave group > Half Day > Full Day > Week Off > Unknown
+    const sortPriority = r => {
+        if(r.status==='Not Recorded')                                       return 0;
+        if(r.status==='Full Day' && isShortHours(r.login, r.logout))        return 1;
+        if(r.status==='On Leave')                                           return 2;
+        if(r.status==='Maternity')                                          return 3;
+        if(r.status==='Menstrual')                                          return 4;
+        if(r.status==='Half Day')                                           return 5;
+        if(r.status==='Full Day')                                           return 6;
+        if(r.status==='Week Off')                                           return 7;
+        return 8; // Unknown / Present
+    };
+    merged.sort((a,b) => sortPriority(a) - sortPriority(b));
 
     const rows = merged.map(r=>{
         const rowClass = r.status==='Full Day'      ?'attend-fullday':
