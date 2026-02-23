@@ -153,12 +153,12 @@
         .modal-confirm h3{font-size:18px;margin-bottom:10px;color:#2c3e50;}
         .modal-confirm p{font-size:14px;color:#666;margin-bottom:22px;line-height:1.5;}
         .modal-btns{display:flex;gap:12px;justify-content:center;}
-        .modal-edit{background:white;border-radius:14px;width:90%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden;}
+        .modal-edit{background:white;border-radius:14px;width:90%;max-width:520px;max-height:90vh;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden;display:flex;flex-direction:column;}
         .modal-edit-header{background:linear-gradient(135deg,#1a4d8c,#2c3e50);color:white;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;}
         .modal-edit-header h3{font-size:16px;font-weight:700;}
         .modal-edit-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8;}
         .modal-edit-close:hover{opacity:1;}
-        .modal-edit-body{padding:24px;}
+        .modal-edit-body{padding:24px;overflow-y:auto;flex:1;}
         .viol-info-box{background:#f8f9fa;border-radius:8px;padding:14px 16px;margin-bottom:20px;border:1px solid #e0e0e0;}
         .viol-info-box .vi-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#555;}
         .viol-info-box .vi-row strong{color:#2c3e50;}
@@ -176,7 +176,7 @@
         .reason-field textarea{width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;resize:none;height:72px;font-family:inherit;}
         .reason-field textarea:focus{outline:none;border-color:#1a4d8c;}
         .reason-field textarea.required-shake{animation:shake .3s;border-color:#dc3545;}
-        .modal-edit-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;}
+        .modal-edit-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;background:white;}
 
         /* date manager */
         .date-manager{background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:16px;margin-bottom:18px;}
@@ -344,6 +344,7 @@
         body.dark .add-emp-row input,.dark .add-emp-row select{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
         body.dark .panel-footer{background:#252839;border-color:#2a2d3e;color:#6a7898;}
         body.dark .modal-confirm,.dark .modal-edit,.dark .modal-clear,.dark .modal-attend,.dark .modal-master-delete,.dark .modal-dateconfirm{background:#1e2130;}
+        body.dark .modal-edit-footer{background:#1e2130;}
         body.dark .modal-confirm h3{color:#e0e6f0;}
         body.dark .modal-confirm p,.dark .modal-clear-body p{color:#8a9ab8;}
         body.dark .modal-clear-body input,.dark .modal-attend-body input,.dark .modal-attend-body select,.dark .modal-master-delete-body input,.dark .modal-dateconfirm-body input{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
@@ -520,7 +521,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.7</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.8</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
