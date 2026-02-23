@@ -578,7 +578,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.4</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.5</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -2058,8 +2058,28 @@ function closeConfirm(){document.getElementById('confirmOverlay').classList.remo
 // ══════════════════════════════════════════════════════════════
 function parseMessages(rawText){
     clearDebug();addDebug('=== Parsing ===');
-    const lines=rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-    const headerRe=/^(.+?)\s+\[(\d{1,2}:\d{2}\s*[AP]M)\]\s*$/i;
+
+    // ── Pre-pass: split lines that have a header embedded mid-line ──
+    // e.g. "Remarks: ...reportJobin Johnson  [8:03 AM]" → split before the name+time
+    // Matches: text followed by 2+ spaces, then a Name [H:MM AM] at end of string
+    const embeddedHeaderRe = /^(.+?)\s{2,}([A-Za-z][^\[\]\n:•]{2,}?)\s{2,}\[(\d{1,2}:\d{2}\s*[AP]M)\]\s*$/i;
+    const rawLines = rawText.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    const splitLines = [];
+    for(const rawLine of rawLines){
+        // Check if this line looks like a concatenation: has non-header prefix + embedded header
+        const em = rawLine.match(embeddedHeaderRe);
+        if(em && em[1].trim() && /[a-z]/i.test(em[2]) && !em[1].trim().match(/^[A-Za-z][^:•]{0,40}$/)){
+            // Split: push prefix as body line, then push the header part as its own line
+            splitLines.push(em[1].trim());
+            splitLines.push(em[2].trim() + '  [' + em[3] + ']');
+            addDebug('Split line: ' + rawLine.substring(0,60));
+        } else {
+            splitLines.push(rawLine);
+        }
+    }
+
+    // ── Real header: name must not contain : or bullet chars ──
+    const headerRe=/^([^:•\[\]]+?)\s+\[(\d{1,2}:\d{2}\s*[AP]M)\]\s*$/i;
     const msgs=[];let cur=null;
     function flush(){
         if(!cur)return;
@@ -2068,7 +2088,7 @@ function parseMessages(rawText){
         if(/\b(in\s+working|working\s+on)\b/i.test(body)||/\blogin\b/i.test(body)){msgs.push({name:cur.name,type:'login',time:cur.time});return;}
         if(/\bworked\s+on\b/i.test(body)||/\blogout\b/i.test(body)){msgs.push({name:cur.name,type:'logout',time:cur.time});return;}
     }
-    for(const rawLine of lines){
+    for(const rawLine of splitLines){
         const line=rawLine.trim();if(!line)continue;
         const hm=line.match(headerRe);
         if(hm){flush();cur={name:findEmployee(hm[1].trim()),time:hm[2].replace(/\s+/g,' '),lines:[]};}
