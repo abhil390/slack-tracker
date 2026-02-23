@@ -520,7 +520,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.5</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v10.6</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -732,6 +732,9 @@
                 <input type="date" id="empRangeTo" onchange="applyEmpDateRange()"/>
                 <button class="btn btn-secondary btn-sm" onclick="clearEmpDateRange()">✖ Clear Range</button>
                 <span id="empRangeLabel" style="font-size:12px;color:#888;"></span>
+            </div>
+            <div id="attendWeekendNotice" style="display:none;background:#f5f0ff;border:1px solid #c9a8ff;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:13px;color:#5a32a3;">
+                🏖️ <strong>Weekend:</strong> Data Annotation team is auto-marked as <strong>Week Off</strong>. If they worked, paste their Slack messages and process — it will override to their actual hours.
             </div>
             <div class="attend-summary" id="attendSummary"></div>
             <div class="attend-table-wrap">
@@ -1893,7 +1896,9 @@ function getAttendanceStatus(login, logout, hasLogin, hasLogout){
                    return { status:'Full Day',  statusClass:'status-complete', icon:'✅', attendStatus:'Full Day',  isViolation:false, shortHours:false };
 }
 
-function buildReport(msgs){
+function buildReport(msgs, dateStr){
+    // dateStr passed explicitly — no DOM access inside map
+    const reportDate = dateStr || document.getElementById('reportDate')?.value || new Date().toISOString().split('T')[0];
     const state={};
     allEmployees().forEach(n=>{state[n]={logins:[],logouts:[],onLeave:false};});
     msgs.forEach(m=>{
@@ -1908,7 +1913,6 @@ function buildReport(msgs){
         const login=s.logins.sort((a,b)=>(timeToMinutes(a)||0)-(timeToMinutes(b)||0))[0]||null;
         const logout=s.logouts.sort((a,b)=>(timeToMinutes(b)||0)-(timeToMinutes(a)||0))[0]||null;
         // Auto Week Off: Annotation team on weekends with NO Slack data
-        const reportDate = document.getElementById('reportDate').value || new Date().toISOString().split('T')[0];
         if(isAutoWeekOff(name, team, reportDate) && !login && !logout){
             return{name,team,login:'-',logout:'-',workingHours:'-',status:'Week Off',statusClass:'status-leave',icon:'🏖️',isViolation:false,shortHours:false,autoWeekOff:true};
         }
@@ -2884,26 +2888,32 @@ function closeDateConfirm(){
 }
 
 async function processMessages(){
-    const input = document.getElementById('slackInput').value.trim();
-    if(!input){ alert('Please paste some Slack messages first!'); return; }
-    const msgs = parseMessages(input);
-    if(!msgs.length){ alert('No valid messages detected.'); return; }
+    try{
+        const input = document.getElementById('slackInput').value.trim();
+        if(!input){ alert('Please paste some Slack messages first!'); return; }
+        const msgs = parseMessages(input);
+        if(!msgs.length){ alert('No valid messages detected. Check the format.'); return; }
 
-    // Build report NOW (before modal) so it's ready when confirmed
-    lastReport = buildReport(msgs);
+        let dateStr = document.getElementById('reportDate').value;
+        if(!dateStr) dateStr = new Date().toISOString().split('T')[0];
 
-    let dateStr = document.getElementById('reportDate').value;
-    if(!dateStr) dateStr = new Date().toISOString().split('T')[0];
+        // Build report NOW (before modal) — pass dateStr explicitly
+        lastReport = buildReport(msgs, dateStr);
 
-    // Check if this date already has data in DB
-    const existingCount = dbRows.filter(r=>r.date===dateStr).length;
-    if(existingCount > 0){
-        const proceed = await showReprocessWarning(dateStr, existingCount);
-        if(!proceed) return;
+        // Check if this date already has data in DB
+        const existingCount = dbRows.filter(r=>r.date===dateStr).length;
+        if(existingCount > 0){
+            const proceed = await showReprocessWarning(dateStr, existingCount);
+            if(!proceed) return;
+        }
+
+        // Show date confirmation modal
+        openDateConfirm(dateStr, ()=> doProcessMessages(dateStr));
+    } catch(err){
+        console.error('[processMessages] ERROR:', err);
+        showToast('❌ Error processing: ' + err.message);
+        setSyncStatus('error', '❌ Processing error: ' + err.message);
     }
-
-    // Show date confirmation modal
-    openDateConfirm(dateStr, ()=> doProcessMessages(dateStr));
 }
 
 function showReprocessWarning(dateStr, count){
@@ -2923,6 +2933,7 @@ function showReprocessWarning(dateStr, count){
 }
 
 async function doProcessMessages(dateStr){
+    try{
     lastProcessedDate = dateStr; // track for Today's Violations tab
 
     // ── Step 1: Show results instantly (synchronous, no DB needed) ──
@@ -2976,6 +2987,12 @@ async function doProcessMessages(dateStr){
 
     // ── Step 3: Save to cloud in background — UI already showing results ──
     await saveViolationsForDate(dateStr, lastReport);
+
+    } catch(err){
+        console.error('[doProcessMessages] ERROR:', err);
+        showToast('❌ Processing error: ' + err.message);
+        setSyncStatus('error', '❌ Processing error: ' + err.message);
+    }
 }
 
 function clearAll(){
