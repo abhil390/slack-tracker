@@ -249,6 +249,22 @@
         .res-badge.res-menstrual{background:#fce4ec;color:#880e4f;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
         .btn-quick.bq-menstrual{background:#fce4ec;color:#880e4f;}
         .quick-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+        .bulk-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;background:#fff8e1;border:1.5px solid #ffe082;border-radius:10px;padding:10px 14px;margin-bottom:12px;}
+        .bulk-bar.visible{display:flex;}
+        .bulk-bar-label{font-size:13px;font-weight:700;color:#555;white-space:nowrap;}
+        .bulk-select-all{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#1a4d8c;cursor:pointer;white-space:nowrap;}
+        .bulk-select-all input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1a4d8c;}
+        .emp-checkbox-wrap{display:flex;align-items:center;gap:8px;}
+        .emp-checkbox-wrap input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1a4d8c;flex-shrink:0;}
+        .btn-bulk{border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:opacity .15s;}
+        .btn-bulk:hover{opacity:.82;}
+        .btn-bulk.bb-leave{background:#f8d7da;color:#721c24;}
+        .btn-bulk.bb-ignore-full{background:#d4edda;color:#155724;}
+        .btn-bulk.bb-ignore-half{background:#fff3cd;color:#856404;}
+        .btn-bulk.bb-weekoff{background:#e8d5ff;color:#5a32a3;}
+        .btn-bulk.bb-maternity{background:#fce4ec;color:#ad1457;}
+        .btn-bulk.bb-menstrual{background:#fce4ec;color:#880e4f;}
+        .bulk-count{font-size:12px;color:#888;font-weight:600;}
         .btn-quick{border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity .15s;}
         .btn-quick:hover{opacity:.82;}
         .btn-quick.bq-leave{background:#f8d7da;color:#721c24;}
@@ -398,6 +414,14 @@
         body.dark .attend-menstrual td:first-child{border-left-color:#dc3545;}
         body.dark .res-badge.res-menstrual{background:#3b0a1e;color:#f48fb1;}
         body.dark .btn-quick.bq-menstrual{background:#3b0a1e;color:#f48fb1;}
+        body.dark .bulk-bar{background:#1a1a2e;border-color:#444;}
+        body.dark .bulk-bar-label{color:#aaa;}
+        body.dark .btn-bulk.bb-leave{background:#3b1520;color:#f48fb1;}
+        body.dark .btn-bulk.bb-ignore-full{background:#0d2b12;color:#81c784;}
+        body.dark .btn-bulk.bb-ignore-half{background:#2e2000;color:#ffd54f;}
+        body.dark .btn-bulk.bb-weekoff{background:#2a1a44;color:#c9a8ff;}
+        body.dark .btn-bulk.bb-maternity{background:#3b0a1e;color:#f48fb1;}
+        body.dark .btn-bulk.bb-menstrual{background:#3b0a1e;color:#f48fb1;}
         body.dark .monthly-cal-wrap{background:#1e2130;}
         body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
         body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
@@ -548,7 +572,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.0</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.1</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -690,6 +714,21 @@
                 </select>
                 <span id="dateReenterBtn" style="display:none;"></span>
                 <span id="dateMeta" style="display:none;"></span>
+                <!-- Bulk Action Bar -->
+                <div class="bulk-bar" id="bulkBar">
+                    <label class="bulk-select-all">
+                        <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAll(this.checked)"> Select All
+                    </label>
+                    <span class="bulk-count" id="bulkCount">0 selected</span>
+                    <span style="color:#ddd;">|</span>
+                    <span class="bulk-bar-label">Apply to selected:</span>
+                    <button class="btn-bulk bb-leave"       onclick="applyBulk('On Leave','')">📅 On Leave</button>
+                    <button class="btn-bulk bb-ignore-full" onclick="applyBulk('Ignored','[Full Day] Bulk action')">✅ Ignore Full</button>
+                    <button class="btn-bulk bb-ignore-half" onclick="applyBulk('Ignored','[Half Day] Bulk action')">🌓 Ignore Half</button>
+                    <button class="btn-bulk bb-weekoff"     onclick="applyBulk('Week Off','')">🏖️ Week Off</button>
+                    <button class="btn-bulk bb-maternity"   onclick="applyBulk('Maternity','Maternity leave')">🤱 Maternity</button>
+                    <button class="btn-bulk bb-menstrual"   onclick="applyBulk('Menstrual','Menstrual leave')">🌸 Menstrual</button>
+                </div>
                 <div id="histContent"></div>
                 <!-- Hidden date inputs kept for backwards compat with getHistFilters -->
                 <input type="hidden" id="histFromDate" value=""/>
@@ -1645,6 +1684,66 @@ async function quickResolve(date, name, resolution, reason){
 }
 
 // ══════════════════════════════════════════════════════════════
+//  BULK ACTIONS — checkbox select + apply to all selected
+// ══════════════════════════════════════════════════════════════
+function getSelectedEmployees(){
+    return [...document.querySelectorAll('.emp-viol-cb:checked')].map(cb=>cb.dataset.name);
+}
+
+function onEmpCbChange(){
+    const selected = getSelectedEmployees();
+    const total    = document.querySelectorAll('.emp-viol-cb').length;
+    const bar      = document.getElementById('bulkBar');
+    const count    = document.getElementById('bulkCount');
+    const allCb    = document.getElementById('bulkSelectAll');
+    count.textContent = selected.length + ' selected';
+    bar.classList.toggle('visible', selected.length > 0);
+    if(allCb) allCb.checked = selected.length === total && total > 0;
+}
+
+function toggleSelectAll(checked){
+    document.querySelectorAll('.emp-viol-cb').forEach(cb=>{ cb.checked = checked; });
+    onEmpCbChange();
+}
+
+async function applyBulk(resolution, reason){
+    const selected = getSelectedEmployees();
+    if(!selected.length){ showToast('⚠️ No employees selected.'); return; }
+
+    // Find the date for each selected employee's active violation
+    const showDate = lastProcessedDate || new Date().toISOString().split('T')[0];
+    const toUpdate = [];
+    selected.forEach(name=>{
+        // Find ALL active violations for this employee on the shown date
+        const rows = dbRows.filter(r=>r.name===name && r.date===showDate && r.resolution==='violation');
+        rows.forEach(r=>toUpdate.push({date:r.date, name:r.name}));
+    });
+
+    if(!toUpdate.length){ showToast('⚠️ No active violations found for selected employees.'); return; }
+
+    const labels = {
+        'On Leave':'📅 On Leave','Maternity':'🤱 Maternity Leave',
+        'Menstrual':'🌸 Menstrual Leave','Week Off':'🏖️ Week Off','Ignored':'🔕 Ignored'
+    };
+    setSyncStatus('loading', `Applying ${labels[resolution]||resolution} to ${toUpdate.length} record(s)…`);
+
+    // Save all sequentially
+    for(const {date, name} of toUpdate){
+        await saveResolutionToCloud(date, name, resolution, reason);
+    }
+
+    showToast(`✅ ${labels[resolution]||resolution} applied to ${selected.length} employee(s).`);
+    setSyncStatus('ok', `✅ Bulk update done — ${toUpdate.length} record(s) updated.`);
+
+    // Uncheck all and hide bar
+    document.querySelectorAll('.emp-viol-cb').forEach(cb=>{ cb.checked=false; });
+    const allCb = document.getElementById('bulkSelectAll');
+    if(allCb) allCb.checked = false;
+    document.getElementById('bulkBar').classList.remove('visible');
+    document.getElementById('bulkCount').textContent = '0 selected';
+}
+
+// ══════════════════════════════════════════════════════════════
 //  HISTORY RENDER
 // ══════════════════════════════════════════════════════════════
 function renderHistory(filters={}){
@@ -1745,9 +1844,17 @@ function renderHistory(filters={}){
             </tr>`;
         }).join('');
 
+        // Checkbox only for employees with active violations
+        const hasActive = activeV > 0;
+        const cbHtml = hasActive
+            ? `<input type="checkbox" class="emp-viol-cb" data-name="${esc(emp.name)}"
+                style="width:16px;height:16px;cursor:pointer;accent-color:#1a4d8c;flex-shrink:0;"
+                onchange="onEmpCbChange()" onclick="event.stopPropagation()">`
+            : '';
         return`<div class="hist-emp-block">
             <div class="hist-emp-header" onclick="toggleHistBlock('hb${i}')">
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div class="emp-checkbox-wrap">
+                    ${cbHtml}
                     <span class="hist-emp-name">${esc(emp.name)}</span>${teamBadge}
                 </div>
                 <div class="hist-emp-meta">${streakBadge}${activeBadge}${resolvedBadge}
@@ -3120,7 +3227,9 @@ function switchHistTab(tab){
         updateTodayViolTabLabel();
         renderHistory(getHistFilters());
     } else if(tab==='all'){
-        // Auto-load: show all employees that have violations, collapsed
+        // Hide bulk bar when switching away
+        const bar = document.getElementById('bulkBar');
+        if(bar) bar.classList.remove('visible');
         renderEmpHistory();
     }
 }
