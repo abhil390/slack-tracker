@@ -578,7 +578,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.6</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.7</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1383,11 +1383,28 @@ async function saveViolationsForDate(dateStr, report){
 
         // ── Step 2: Build fresh rows for every employee ──
         const fresh = report.map(r => {
-            const cleanLogin  = r.login  === '❌ No login'  ? '' : (r.login  || '');
-            const cleanLogout = r.logout === '❌ No logout' ? '' : (r.logout || '');
-            // Half Day is only a violation if hours < 4 (isViolation flag from getAttendanceStatus)
-            const isViol    = r.status==='Missing'; // Only Missing is a violation
-            const isWeekOff = r.status==='Week Off';
+            const cleanLogin  = (r.login  === '❌ No login'  || r.login  === '-') ? '' : (r.login  || '');
+            const cleanLogout = (r.logout === '❌ No logout' || r.logout === '-') ? '' : (r.logout || '');
+            // Map status → resolution correctly for all special cases
+            const isViol      = r.status === 'Missing';
+            const isWeekOff   = r.status === 'Week Off'   || r.autoWeekOff;
+            const isOnLeave   = r.status === 'On Leave';
+            const isMaternity = r.status === 'Maternity';
+            const isMenstrual = r.status === 'Menstrual';
+            let resolution, reason, resolved_at;
+            if(isWeekOff){
+                resolution='Week Off'; reason='[Auto] Weekend week off'; resolved_at=new Date().toLocaleString();
+            } else if(isOnLeave){
+                resolution='On Leave'; reason='On Leave'; resolved_at=new Date().toLocaleString();
+            } else if(isMaternity){
+                resolution='Maternity'; reason='Maternity leave'; resolved_at=new Date().toLocaleString();
+            } else if(isMenstrual){
+                resolution='Menstrual'; reason='Menstrual leave'; resolved_at=new Date().toLocaleString();
+            } else if(isViol){
+                resolution='violation'; reason=''; resolved_at='';
+            } else {
+                resolution='present'; reason=''; resolved_at='';
+            }
             return {
                 date:          dateStr,
                 name:          r.name,
@@ -1396,9 +1413,9 @@ async function saveViolationsForDate(dateStr, report){
                 login:         cleanLogin,
                 logout:        cleanLogout,
                 working_hours: r.workingHours || '-',
-                resolution:    isWeekOff ? 'Week Off' : isViol ? 'violation' : 'present',
-                reason:        isWeekOff ? '[Auto] Weekend week off' : '',
-                resolved_at:   isWeekOff ? new Date().toLocaleString() : ''
+                resolution,
+                reason,
+                resolved_at
             };
         });
 
@@ -2147,12 +2164,12 @@ function buildReport(msgs, dateStr){
     });
     return Object.keys(state).sort().map(name=>{
         const s=state[name];const team=getTeam(name)||'annotation';
-        if(s.onLeave)return{name,team,login:'-',logout:'-',workingHours:'-',status:'On Leave',statusClass:'status-leave',icon:'📅',isViolation:false,shortHours:false};
+        if(s.onLeave)return{name,team,login:'',logout:'',workingHours:'-',status:'On Leave',statusClass:'status-leave',icon:'📅',isViolation:false,shortHours:false};
         const login=s.logins.sort((a,b)=>(timeToMinutes(a)||0)-(timeToMinutes(b)||0))[0]||null;
         const logout=s.logouts.sort((a,b)=>(timeToMinutes(b)||0)-(timeToMinutes(a)||0))[0]||null;
         // Auto Week Off: Annotation team on weekends with NO Slack data
         if(isAutoWeekOff(name, team, reportDate) && !login && !logout){
-            return{name,team,login:'-',logout:'-',workingHours:'-',status:'Week Off',statusClass:'status-leave',icon:'🏖️',isViolation:false,shortHours:false,autoWeekOff:true};
+            return{name,team,login:'',logout:'',workingHours:'-',status:'Week Off',statusClass:'status-leave',icon:'🏖️',isViolation:false,shortHours:false,autoWeekOff:true};
         }
         let hours='-';
         if(login&&logout){const d=timeToMinutes(logout)-timeToMinutes(login);hours=((d<0?d+1440:d)/60).toFixed(2)+' hrs';}
@@ -2638,8 +2655,8 @@ function renderAttendance(dateStr){
         if(isCurrentDate){
             const rep = lastReport.find(r=>r.name===e.name);
             if(rep){
-                const cleanLogin  = rep.login  === '❌ No login'  ? '' : rep.login;
-                const cleanLogout = rep.logout === '❌ No logout' ? '' : rep.logout;
+                const cleanLogin  = (rep.login  === '❌ No login'  || rep.login  === '-') ? '' : rep.login;
+                const cleanLogout = (rep.logout === '❌ No logout' || rep.logout === '-') ? '' : rep.logout;
                 return { name:e.name, team:e.team, date:dateStr,
                     status: rep.status==='On Leave'?'On Leave': rep.status==='Missing'?'Not Recorded': rep.status,
                     login:cleanLogin, logout:cleanLogout, notes:'', source:'slack', id:null };
@@ -2669,6 +2686,7 @@ function renderAttendance(dateStr){
                 else status = 'Full Day';
             }
             else if(viol.resolution==='violation') status = viol.status==='Missing'?'Not Recorded':viol.status;
+            else if(viol.status==='On Leave') status = 'On Leave';
             else status = viol.status==='Missing'?'Not Recorded':viol.status;
 
             return { name:e.name, team:e.team, date:dateStr,
