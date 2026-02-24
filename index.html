@@ -428,6 +428,7 @@
         body.dark .btn-bulk.bb-menstrual{background:#3b0a1e;color:#f48fb1;}
         body.dark .btn-excuse{background:#0d2b12;color:#81c784;}
         body.dark .short-excused-badge{background:#0d2b12;color:#81c784;}
+        body.dark #syncRetryBtn{background:#4a90d9;color:#fff;}
         body.dark .monthly-cal-wrap{background:#1e2130;}
         body.dark .monthly-cal-head{background:#252839;border-color:#2a2d3e;}
         body.dark .monthly-cal-emp{background:#252839;border-color:#2a2d3e;color:#c0c8dc;}
@@ -578,7 +579,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.7</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v11.8</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1132,7 +1133,7 @@ const ATTEND_TABLE = 'attendance_records';
 // ══════════════════════════════════════════════════════════════
 //  SUPABASE API WRAPPER  (no extra libraries needed)
 // ══════════════════════════════════════════════════════════════
-async function sbFetch(path, opts={}){
+async function sbFetch(path, opts={}, _retry=true){
     const url = SUPABASE_URL + '/rest/v1/' + path;
     const method = opts.method || 'GET';
     const headers = {
@@ -1140,22 +1141,38 @@ async function sbFetch(path, opts={}){
         'Authorization': 'Bearer ' + SUPABASE_KEY,
         'Content-Type': 'application/json',
     };
-    // Supabase requires Prefer: return=minimal for write operations to avoid errors
     if(method !== 'GET') headers['Prefer'] = opts.prefer || 'return=minimal';
-    if(opts.prefer)      headers['Prefer'] = opts.prefer; // explicit override
+    if(opts.prefer)      headers['Prefer'] = opts.prefer;
     if(opts.headers)     Object.assign(headers, opts.headers);
 
-    const res = await fetch(url, {
-        method,
-        headers,
-        body: opts.body || undefined
-    });
-    if(!res.ok){
-        const err = await res.text();
-        throw new Error(`Supabase ${method} error ${res.status}: ${err}`);
+    // 15-second timeout — prevents infinite loading if Supabase is cold/unreachable
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(), 15000);
+
+    try{
+        const res = await fetch(url, {
+            method,
+            headers,
+            body: opts.body || undefined,
+            signal: controller.signal
+        });
+        clearTimeout(timer);
+        if(!res.ok){
+            const err = await res.text();
+            throw new Error(`Supabase ${method} error ${res.status}: ${err}`);
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : [];
+    } catch(e){
+        clearTimeout(timer);
+        // On timeout or network error — retry once after 3s
+        if(_retry && (e.name==='AbortError' || e.message.includes('fetch'))){
+            await new Promise(r=>setTimeout(r,3000));
+            return sbFetch(path, opts, false); // retry once
+        }
+        if(e.name==='AbortError') throw new Error('Request timed out — Supabase may be waking up. Try refreshing.');
+        throw e;
     }
-    const text = await res.text();
-    return text ? JSON.parse(text) : [];
 }
 
 // Load all rows sorted by date
@@ -1352,7 +1369,7 @@ function setSyncStatus(state, msg){
 //  LOAD FROM SUPABASE
 // ══════════════════════════════════════════════════════════════
 async function loadFromCloud(){
-    setSyncStatus('loading','Loading shared history from cloud…');
+    setSyncStatus('loading','⏳ Connecting to cloud database…');
     try{
         dbRows = await dbLoad();
         const active = dbRows.filter(r=>r.resolution==='violation').length;
@@ -1360,8 +1377,17 @@ async function loadFromCloud(){
         renderHistory(getHistFilters());
         renderDateManager();
         refreshAttendDateSelect();
+        // Hide retry button on success
+        const rb = document.getElementById('syncRetryBtn');
+        if(rb) rb.style.display='none';
     } catch(e){
-        setSyncStatus('error','❌ Could not connect to database. Check your API key. — '+e.message);
+        const msg = e.message.includes('timed out')
+            ? '⏱️ Connection timed out — Supabase may be waking up.'
+            : '❌ Cannot reach database — ' + e.message.substring(0,80);
+        setSyncStatus('error', msg);
+        // Show retry button
+        const rb = document.getElementById('syncRetryBtn');
+        if(rb) rb.style.display='inline-block';
     }
 }
 
@@ -1437,7 +1463,12 @@ async function saveViolationsForDate(dateStr, report){
         refreshAttendDateSelect();
 
     } catch(e){
-        setSyncStatus('error','❌ Save failed: '+e.message);
+        const isTimeout = e.message.includes('timed out') || e.name==='AbortError';
+        setSyncStatus('error', isTimeout
+            ? '⏱️ Save timed out — Supabase may be sleeping. Click 🔄 Retry to reconnect, then try again.'
+            : '❌ Save failed: '+e.message);
+        const rb = document.getElementById('syncRetryBtn');
+        if(rb) rb.style.display='inline-block';
         console.error('saveViolationsForDate error:', e);
     }
 }
@@ -1452,6 +1483,7 @@ async function saveResolutionToCloud(date, name, resolution, reason){
         const idx = dbRows.findIndex(d => d.date === date && d.name === name);
         if(idx === -1 || !dbRows[idx].id){
             setSyncStatus('error','❌ Record not found. Click 🔄 Refresh and try again.');
+        const rb=document.getElementById('syncRetryBtn'); if(rb) rb.style.display='inline-block';
             return;
         }
         const rowId = dbRows[idx].id;
