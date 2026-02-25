@@ -580,7 +580,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.3</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.4</span></h1>
         <p>Shared history between both users — powered by Neon via Google Apps Script</p>
     </div>
 
@@ -1130,7 +1130,7 @@ function showMainApp(session){
 // ══════════════════════════════════════════════════════════════
 // 1. Open script.google.com → New Project → paste Code.gs content
 // 2. Deploy → New deployment → Web App → Anyone → Copy URL
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxOhq4uNC7x01HQd7G6HX8xzHXnq4l1wMYyURTU6fo08aouoPv-Cg1ws8j7EYgdUg4yrw/exec;
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzWAg2qm1-V6MRjrGG-BgTmf6sIFZJ4lhsd4iYMIoVo46kC904IxjkcPWn2yR9J9iJJ/exec';
 
 // Secret token — must match SECRET_TOKEN in your Apps Script
 const GAS_TOKEN = 'slacktracker2025secret';
@@ -1387,7 +1387,7 @@ async function saveViolationsForDate(dateStr, report){
         // This ensures re-processing always starts fresh — no stale resolutions, no ghost records.
         await Promise.all([
             dbDeleteByDate(dateStr),
-            sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE'}).catch(()=>{})
+            gasCall('delete_slack_attendance_for_date', {date: dateStr}).catch(()=>{})
         ]);
 
         // Remove from local cache immediately
@@ -2553,7 +2553,7 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
 
     try{
         // Load manual overrides from attendance_records for this employee
-        const manualRows = await sbFetch(ATTEND_TABLE + '?name=eq.' + encodeURIComponent(empName) + '&source=eq.manual&order=date.desc&select=*').catch(()=>[]);
+        const manualRows = await gasCall('load_attendance_by_employee', {name: empName}).catch(()=>[]);
 
         // All employee records now stored in dbRows (violation_history table)
         const empDbRows = dbRows.filter(r=>r.name===empName);
@@ -3123,8 +3123,8 @@ async function onMddConfirm(){
 
     setSyncStatus('loading','Deleting all data for '+formatDate(dateStr)+'…');
     try{
-        await sbFetch(TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE', prefer:'return=minimal'});
-        await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr), {method:'DELETE', prefer:'return=minimal'}).catch(()=>{});
+        await gasCall('delete_violations_by_date', {date: dateStr});
+        await gasCall('delete_slack_attendance_for_date', {date: dateStr}).catch(()=>{});
 
         dbRows       = dbRows.filter(r=>r.date!==dateStr);
         attendRows   = [];
@@ -3755,7 +3755,7 @@ async function initApp(){
             // Delete violation_history and attendance_records in parallel
             await Promise.all([
                 dbDeleteAll(),
-                sbFetch(ATTEND_TABLE+'?date=gte.0000-00-00', {method:'DELETE'}).catch(()=>{})
+                gasCall('delete_all_attendance',{}).catch(()=>{})
             ]);
             await loadFromCloud();
             attendRows = [];
