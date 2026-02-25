@@ -580,7 +580,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.4</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.5</span></h1>
         <p>Shared history between both users — powered by Neon via Google Apps Script</p>
     </div>
 
@@ -1130,7 +1130,7 @@ function showMainApp(session){
 // ══════════════════════════════════════════════════════════════
 // 1. Open script.google.com → New Project → paste Code.gs content
 // 2. Deploy → New deployment → Web App → Anyone → Copy URL
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzWAg2qm1-V6MRjrGG-BgTmf6sIFZJ4lhsd4iYMIoVo46kC904IxjkcPWn2yR9J9iJJ/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyQZA3YN0h3z0nk7Wx_JbXHA0TnESehBLeMh_hpLh7Acvu8PYNcwlrMhPebJFv7YgrR9g/exec';
 
 // Secret token — must match SECRET_TOKEN in your Apps Script
 const GAS_TOKEN = 'slacktracker2025secret';
@@ -1143,27 +1143,30 @@ async function gasCall(action, extra={}, _retry=true){
         throw new Error('Apps Script URL not configured. Paste your deployment URL into GAS_URL.');
     }
     const controller = new AbortController();
-    const timer = setTimeout(()=>controller.abort(), 25000);
+    // Longer timeout for bulk inserts (56 employees can take time)
+    const timer = setTimeout(()=>controller.abort(), 60000);
     try{
         const res = await fetch(GAS_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ token: GAS_TOKEN, action, ...extra }),
             signal: controller.signal
         });
         clearTimeout(timer);
         const text = await res.text();
         let json;
-        try{ json = JSON.parse(text); } catch(e){ throw new Error('Bad response: '+text.substring(0,100)); }
+        try{ json = JSON.parse(text); } catch(e){ throw new Error('Bad response from server: '+text.substring(0,200)); }
         if(json.error) throw new Error(json.error);
         return json.data;
     } catch(e){
         clearTimeout(timer);
-        if(_retry && (e.name==='AbortError' || e.message.includes('fetch') || e.message.includes('Failed'))){
+        // Only retry on genuine network failures, not DB/logic errors
+        const isNetwork = e.name==='AbortError' || (e.message.includes('fetch') && !e.message.includes('Bad response'));
+        if(_retry && isNetwork){
             await new Promise(r=>setTimeout(r,3000));
             return gasCall(action, extra, false);
         }
-        if(e.name==='AbortError') throw new Error('Request timed out — check internet connection.');
+        if(e.name==='AbortError') throw new Error('Request timed out — the operation may have taken too long. Try again.');
         throw e;
     }
 }
@@ -1200,12 +1203,14 @@ async function dbDeleteByDate(dateStr){
 
 async function dbBulkInsertViolations(rows){
     if(!rows.length) return [];
-    return gasCall('bulk_insert_violations', { rows });
+    const result = await gasCall('bulk_insert_violations', { rows });
+    return Array.isArray(result) ? result : [];
 }
 
 // ── attendance_records operations ──
 async function dbLoadAttendance(dateStr){
-    return gasCall('load_attendance', { date: dateStr });
+    const r = await gasCall('load_attendance', { date: dateStr });
+    return Array.isArray(r) ? r : [];
 }
 
 async function dbSaveAttendance(row){
@@ -1217,7 +1222,8 @@ async function dbDeleteAttendance(id){
 }
 
 async function dbLoadAttendanceDates(){
-    return gasCall('load_attendance_dates');
+    const r = await gasCall('load_attendance_dates');
+    return Array.isArray(r) ? r : [];
 }
 
 async function dbBulkInsertAttendance(rows){
@@ -1341,7 +1347,8 @@ async function loadFromCloud(){
     }
     setSyncStatus('loading','⏳ Connecting to database…');
     try{
-        dbRows = await dbLoad();
+        const rawRows = await dbLoad();
+        dbRows = Array.isArray(rawRows) ? rawRows : [];
         const active = dbRows.filter(r=>r.resolution==='violation').length;
         loadFromCloud._retries = 0;
         setSyncStatus('ok','✅ Connected — '+active+' active violation'+(active!==1?'s':'')+' | '+dbRows.length+' total records.');
@@ -1384,11 +1391,8 @@ async function saveViolationsForDate(dateStr, report){
     setSyncStatus('loading','Saving to cloud…');
     try{
         // ── Step 1: Delete ALL existing rows for this date (both tables) ──
-        // This ensures re-processing always starts fresh — no stale resolutions, no ghost records.
-        await Promise.all([
-            dbDeleteByDate(dateStr),
-            gasCall('delete_slack_attendance_for_date', {date: dateStr}).catch(()=>{})
-        ]);
+        await dbDeleteByDate(dateStr);
+        await gasCall('delete_slack_attendance_for_date', {date: dateStr}).catch(()=>{});
 
         // Remove from local cache immediately
         dbRows = dbRows.filter(r => r.date !== dateStr);
@@ -1475,7 +1479,7 @@ async function saveResolutionToCloud(date, name, resolution, reason){
         const rowId = dbRows[idx].id;
         const resolvedAt = resolution !== 'violation' ? new Date().toLocaleString() : '';
 
-        // STEP 1: Send PATCH to Supabase
+        // STEP 1: Send update to cloud
         await dbPatch(rowId, {
             resolution:  resolution,
             reason:      reason,
@@ -1519,7 +1523,7 @@ async function saveResolutionToCloud(date, name, resolution, reason){
             const sel = document.getElementById('attendDateSelect');
             if(sel) sel.value = editedDate;
             dbLoadAttendance(editedDate).then(rows=>{
-                attendRows = rows;
+                attendRows = Array.isArray(rows) ? rows : [];
                 renderAttendance(editedDate);
             }).catch(()=>{ attendRows=[]; renderAttendance(editedDate); });
         } else {
