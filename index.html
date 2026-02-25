@@ -580,8 +580,8 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.1</span></h1>
-        <p>Shared history between both users — powered by Neon PostgreSQL database</p>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.3</span></h1>
+        <p>Shared history between both users — powered by Neon via Google Apps Script</p>
     </div>
 
     <!-- Sync status bar -->
@@ -1126,93 +1126,55 @@ function showMainApp(session){
 }
 
 // ══════════════════════════════════════════════════════════════
-//  ⚙️  NEON CONFIG  — paste your Neon connection string here
+//  ⚙️  CONFIG — paste your Google Apps Script Web App URL here
 // ══════════════════════════════════════════════════════════════
-// Get this from: neon.tech → your project → Dashboard → Connection string
-// Use the "pooled" connection string, format:
-//   postgresql://user:password@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
-const NEON_CONNECTION_STRING = 'postgresql://neondb_owner:npg_CAxvq3BS7DGY@ep-lively-glade-a1ct3hwd-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+// 1. Open script.google.com → New Project → paste Code.gs content
+// 2. Deploy → New deployment → Web App → Anyone → Copy URL
+const GAS_URL = 'https://script.google.com/a/macros/camcom.ai/s/AKfycbxMtSvo5HiJ8HVvrwivwKBq6M7w4t3Zt8hXqn7slzNe2Z1VpcAG_voVBcPFbjk5dL6G/exec';
 
-// Neon HTTP API endpoint — derived from connection string
-function getNeonEndpoint(){
-    try{
-        // Extract host from connection string: postgresql://user:pass@host/db
-        const m = NEON_CONNECTION_STRING.match(/postgresql:\/\/([^:]+):([^@]+)@([^\/]+)\/([^?]+)/);
-        if(!m) return null;
-        return { url: 'https://'+m[3]+'/sql', user: m[1], pass: m[2] };
-    } catch(e){ return null; }
-}
+// Secret token — must match SECRET_TOKEN in your Apps Script
+const GAS_TOKEN = 'slacktracker2025secret';
 
 // ══════════════════════════════════════════════════════════════
-//  NEON HTTP API WRAPPER — sends SQL queries via HTTP
+//  APPS SCRIPT API WRAPPER — CORS-safe, no direct DB exposure
 // ══════════════════════════════════════════════════════════════
-async function neonQuery(sql, params=[], _retry=true){
-    const ep = getNeonEndpoint();
-    if(!ep) throw new Error('Neon connection string not configured. Paste your connection string in the NEON_CONNECTION_STRING variable.');
-
+async function gasCall(action, extra={}, _retry=true){
+    if(!GAS_URL || GAS_URL.includes('PASTE_YOUR')){
+        throw new Error('Apps Script URL not configured. Paste your deployment URL into GAS_URL.');
+    }
     const controller = new AbortController();
-    const timer = setTimeout(()=>controller.abort(), 20000);
+    const timer = setTimeout(()=>controller.abort(), 25000);
     try{
-        const res = await fetch(ep.url, {
+        const res = await fetch(GAS_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Basic ' + btoa(ep.user + ':' + ep.pass),
-                'Neon-Connection-String': NEON_CONNECTION_STRING
-            },
-            body: JSON.stringify({ query: sql, params }),
+            headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
+            body: JSON.stringify({ token: GAS_TOKEN, action, ...extra }),
             signal: controller.signal
         });
         clearTimeout(timer);
-        if(!res.ok){
-            const err = await res.text();
-            throw new Error('Neon query error '+res.status+': '+err);
-        }
-        const data = await res.json();
-        // Neon HTTP API returns { rows: [...], rowCount: N }
-        return data.rows || [];
+        const text = await res.text();
+        let json;
+        try{ json = JSON.parse(text); } catch(e){ throw new Error('Bad response: '+text.substring(0,100)); }
+        if(json.error) throw new Error(json.error);
+        return json.data;
     } catch(e){
         clearTimeout(timer);
-        if(_retry && (e.name==='AbortError' || e.message.includes('fetch'))){
+        if(_retry && (e.name==='AbortError' || e.message.includes('fetch') || e.message.includes('Failed'))){
             await new Promise(r=>setTimeout(r,3000));
-            return neonQuery(sql, params, false);
+            return gasCall(action, extra, false);
         }
-        if(e.name==='AbortError') throw new Error('Request timed out — check your internet connection.');
+        if(e.name==='AbortError') throw new Error('Request timed out — check internet connection.');
         throw e;
     }
 }
 
-// SQL helper: convert JS value to safe param
-function sqlRow(r){
-    return [
-        r.date||null, r.name||null, r.team||null, r.status||null,
-        r.login||null, r.logout||null, r.working_hours||null,
-        r.resolution||'violation', r.reason||null, r.resolved_at||null
-    ];
-}
-function sqlAttendRow(r){
-    return [
-        r.date||null, r.name||null, r.team||null, r.status||null,
-        r.login||null, r.logout||null, r.notes||null, r.source||'manual'
-    ];
-}
-
 // ── violation_history operations ──
 async function dbLoad(){
-    const rows = await neonQuery(
-        'SELECT id,date,name,team,status,login,logout,working_hours,resolution,reason,resolved_at FROM violation_history ORDER BY date ASC'
-    );
-    return rows;
+    return gasCall('load_violations');
 }
 
 async function dbPatch(rowId, fields){
-    const sets = [], vals = [];
-    let i = 1;
-    for(const [k,v] of Object.entries(fields)){
-        sets.push(k+'=$'+i); vals.push(v); i++;
-    }
-    vals.push(rowId);
-    await neonQuery('UPDATE violation_history SET '+sets.join(',')+' WHERE id=$'+i, vals);
+    await gasCall('update_violation', { id: rowId, fields });
     return true;
 }
 
@@ -1225,82 +1187,46 @@ async function dbUpsertByDateName(row){
             resolution:existing.resolution, reason:existing.reason, resolved_at:existing.resolved_at
         });
     }
-    const {id,...payload} = row;
-    const r = await neonQuery(
-        'INSERT INTO violation_history(date,name,team,status,login,logout,working_hours,resolution,reason,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
-        sqlRow(payload)
-    );
-    return r[0]||true;
+    return gasCall('bulk_insert_violations', { rows:[row] });
 }
 
 async function dbDeleteAll(){
-    await neonQuery('DELETE FROM violation_history');
+    await gasCall('delete_all_violations');
 }
 
 async function dbDeleteByDate(dateStr){
-    await neonQuery('DELETE FROM violation_history WHERE date=$1', [dateStr]);
+    await gasCall('delete_violations_by_date', { date: dateStr });
 }
 
 async function dbBulkInsertViolations(rows){
     if(!rows.length) return [];
-    // Insert one at a time and collect returned ids (Neon HTTP doesn't support multi-row RETURNING easily)
-    const inserted = [];
-    for(const row of rows){
-        const {id,...r} = row;
-        const res = await neonQuery(
-            'INSERT INTO violation_history(date,name,team,status,login,logout,working_hours,resolution,reason,resolved_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,date,name,team,status,login,logout,working_hours,resolution,reason,resolved_at',
-            sqlRow(r)
-        );
-        if(res[0]) inserted.push(res[0]);
-    }
-    return inserted;
+    return gasCall('bulk_insert_violations', { rows });
 }
 
 // ── attendance_records operations ──
 async function dbLoadAttendance(dateStr){
-    return neonQuery(
-        'SELECT id,date,name,team,status,login,logout,notes,source FROM attendance_records WHERE date=$1 ORDER BY name ASC',
-        [dateStr]
-    );
+    return gasCall('load_attendance', { date: dateStr });
 }
 
 async function dbSaveAttendance(row){
-    if(row.id){
-        await neonQuery(
-            'UPDATE attendance_records SET date=$1,name=$2,team=$3,status=$4,login=$5,logout=$6,notes=$7,source=$8 WHERE id=$9',
-            [...sqlAttendRow(row), row.id]
-        );
-    } else {
-        const {id,...r} = row;
-        const res = await neonQuery(
-            'INSERT INTO attendance_records(date,name,team,status,login,logout,notes,source) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-            sqlAttendRow(r)
-        );
-        return res[0]||true;
-    }
+    return gasCall('save_attendance', { row });
 }
 
 async function dbDeleteAttendance(id){
-    await neonQuery('DELETE FROM attendance_records WHERE id=$1', [id]);
+    await gasCall('delete_attendance', { id });
 }
 
 async function dbLoadAttendanceDates(){
-    return neonQuery('SELECT DISTINCT date FROM attendance_records ORDER BY date DESC');
+    return gasCall('load_attendance_dates');
 }
 
 async function dbBulkInsertAttendance(rows){
     if(!rows.length) return;
-    for(const row of rows){
-        const {id,...r} = row;
-        await neonQuery(
-            'INSERT INTO attendance_records(date,name,team,status,login,logout,notes,source) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
-            sqlAttendRow(r)
-        );
-    }
+    await gasCall('bulk_insert_attendance', { rows });
 }
 
 async function dbDeleteSlackAttendanceForDate(dateStr){
-    await neonQuery('DELETE FROM attendance_records WHERE date=$1 AND source=$2', [dateStr,'slack']);
+    await gasCall('delete_slack_attendance_for_date', { date: dateStr });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1357,35 +1283,37 @@ async function runDiagnostic(){
     const steps = [];
     let allOk = true;
 
-    // Step 1: Is connection string configured?
-    if(!NEON_CONNECTION_STRING || NEON_CONNECTION_STRING.includes('PASTE_YOUR') || !NEON_CONNECTION_STRING.startsWith('postgresql://')){
-        steps.push('❌ Connection string not set — paste your Neon connection string into NEON_CONNECTION_STRING in the HTML file');
+    // Step 1: Is Apps Script URL configured?
+    if(!GAS_URL || GAS_URL.includes('PASTE_YOUR')){
+        steps.push('❌ Apps Script URL not set — paste your deployment URL into GAS_URL in the HTML file');
         allOk = false;
     } else {
-        steps.push('✅ Connection string looks valid');
+        steps.push('✅ Apps Script URL configured');
 
-        // Step 2: Try a simple query
+        // Step 2: Ping the Apps Script
         try{
-            const rows = await neonQuery('SELECT 1 AS ok', [], false);
-            if(rows && rows[0]) steps.push('✅ Neon database reachable');
-            else steps.push('⚠️ Query returned unexpected result');
+            const r = await gasCall('ping', {}, false);
+            if(r && r.ok) steps.push('✅ Apps Script reachable — '+r.message);
+            else steps.push('⚠️ Apps Script responded but unexpectedly');
         } catch(e){
-            if(e.message.includes('401') || e.message.includes('403'))
-                steps.push('❌ Auth failed — check your connection string credentials');
+            if(e.message.includes('Unauthorized'))
+                steps.push('❌ Token mismatch — check GAS_TOKEN matches SECRET_TOKEN in your Apps Script');
             else if(e.message.includes('timed out'))
-                steps.push('❌ Timeout — check internet or Neon project status at neon.tech');
+                steps.push('❌ Timeout — Apps Script URL may be wrong or not deployed');
+            else if(e.message.includes('404') || e.message.includes('not found'))
+                steps.push('❌ URL not found — re-deploy your Apps Script as a Web App');
             else
-                steps.push('❌ '+e.message.substring(0,100));
+                steps.push('❌ '+e.message.substring(0,120));
             allOk = false;
         }
 
-        // Step 3: Check table exists
+        // Step 3: Check Neon table via Apps Script
         if(allOk){
             try{
-                await neonQuery('SELECT id FROM violation_history LIMIT 1', [], false);
-                steps.push('✅ Table "violation_history" accessible');
+                await gasCall('load_violations', {}, false);
+                steps.push('✅ Neon database accessible via Apps Script');
             } catch(e){
-                steps.push('❌ Table "violation_history" not found — run the setup SQL in your Neon SQL editor');
+                steps.push('❌ Neon DB error — '+e.message.substring(0,100));
                 allOk = false;
             }
         }
@@ -1406,12 +1334,12 @@ async function runDiagnostic(){
 
 async function loadFromCloud(){
     // ── Guard: detect placeholder / missing connection string ──
-    if(!NEON_CONNECTION_STRING || NEON_CONNECTION_STRING.includes('PASTE_YOUR') || !NEON_CONNECTION_STRING.startsWith('postgresql://')){
-        setSyncStatus('error','⚠️ Neon connection string not configured. Open the HTML file and paste your Neon connection string into NEON_CONNECTION_STRING.');
+    if(!GAS_URL || GAS_URL.includes('PASTE_YOUR')){
+        setSyncStatus('error','⚠️ Apps Script URL not configured. Paste your deployment URL into GAS_URL in the HTML file.');
         const rb=document.getElementById('syncRetryBtn'); if(rb) rb.style.display='none';
         return;
     }
-    setSyncStatus('loading','⏳ Connecting to Neon database…');
+    setSyncStatus('loading','⏳ Connecting to database…');
     try{
         dbRows = await dbLoad();
         const active = dbRows.filter(r=>r.resolution==='violation').length;
@@ -1426,20 +1354,21 @@ async function loadFromCloud(){
         const db3 = document.getElementById('syncDiagnoseBtn');
         if(db3) db3.style.display='none';
     } catch(e){
-        // Auto-wake retry: Supabase free tier can take up to 30s to cold-start
-        // Try up to 4 more times (every 8s = max ~48s total wait)
-        const isWaking = e.message.includes('timed out') || e.message.includes('fetch') || e.name==='AbortError';
-        if(isWaking && (loadFromCloud._retries||0) < 4){
+        // Auto-retry on network errors (Apps Script cold start can take a few seconds)
+        const isWaking = e.message.includes('timed out') || e.message.includes('fetch') || e.message.includes('Failed') || e.name==='AbortError';
+        if(isWaking && (loadFromCloud._retries||0) < 3){
             loadFromCloud._retries = (loadFromCloud._retries||0) + 1;
             const attempt = loadFromCloud._retries;
-            setSyncStatus('loading', `⏳ Supabase is waking up… retrying (${attempt}/4) — please wait`);
-            setTimeout(loadFromCloud, 8000);
+            setSyncStatus('loading', `⏳ Connecting… retrying (${attempt}/3)`);
+            setTimeout(loadFromCloud, 5000);
             return;
         }
         loadFromCloud._retries = 0;
-        const msg = e.message.includes('timed out') || e.name==='AbortError'
-            ? '⏱️ Could not connect after multiple retries. Check your internet connection and Neon project status at neon.tech.'
-            : '❌ Cannot reach database — ' + e.message.substring(0,100);
+        const msg = e.message.includes('not configured')
+            ? '⚠️ ' + e.message
+            : e.message.includes('timed out') || e.name==='AbortError'
+                ? '⏱️ Connection timed out. Check internet and try again.'
+                : '❌ Cannot reach database — ' + e.message.substring(0,120);
         setSyncStatus('error', msg);
         const rb = document.getElementById('syncRetryBtn');
         if(rb) rb.style.display='inline-block';
@@ -1522,8 +1451,8 @@ async function saveViolationsForDate(dateStr, report){
     } catch(e){
         const isTimeout = e.message.includes('timed out') || e.name==='AbortError';
         setSyncStatus('error', isTimeout
-            ? '⏱️ Save timed out — Supabase may be sleeping. Click 🔄 Retry to reconnect, then try again.'
-            : '❌ Save failed: '+e.message);
+            ? '⏱️ Save timed out — check internet connection and click 🔄 Retry.'
+            : '❌ Save failed: '+e.message.substring(0,120));
         const rb = document.getElementById('syncRetryBtn');
         if(rb) rb.style.display='inline-block';
         console.error('saveViolationsForDate error:', e);
