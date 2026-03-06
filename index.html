@@ -580,7 +580,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.6</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.7</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -1056,7 +1056,7 @@
 // ══════════════════════════════════════════════════════════════
 const USERS = [
     { username: 'admin',   password: 'Admin@123',  displayName: 'Admin' },
-    { username: 'ramyashree.ragupathy@camcom.ai',   password: 'ramya@camcom',  displayName: 'User 2' }
+    { username: 'ramyashree.ragupathy@camcom.ai',   password: 'ramya@camcom',  displayName: 'Ramyashree V R' }
 ];
 // To add more users, copy a line above and change the details.
 // Example: { username: 'john', password: 'John@789', displayName: 'John' }
@@ -1128,10 +1128,11 @@ function showMainApp(session){
 // ══════════════════════════════════════════════════════════════
 //  ⚙️  SUPABASE CONFIG  — create a NEW Supabase project and paste here
 // ══════════════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://soqinoyhzaneqtuotnmn.supabase.co';        // e.g. https://xxxx.supabase.co
-const SUPABASE_KEY = 'sb_publishable_T-sCZAVVsvs9rk5OJ3P5TA_cQJ4kgJ8';  // eyJ...
+const SUPABASE_URL = 'PASTE_YOUR_SUPABASE_URL_HERE';        // e.g. https://xxxx.supabase.co
+const SUPABASE_KEY = 'PASTE_YOUR_SUPABASE_ANON_KEY_HERE';  // eyJ...
 const TABLE        = 'violation_history';
 const ATTEND_TABLE = 'attendance_records';
+const SETTINGS_TABLE = 'app_settings';
 
 // ══════════════════════════════════════════════════════════════
 //  SUPABASE REST API WRAPPER  (direct — no middleman, very fast)
@@ -1276,7 +1277,7 @@ const DEFAULT_TEAMS={
     ]
 };
 
-const LS_TEAMS = 'slackTracker_teams_v1';
+// LS_TEAMS removed — employee list now stored in Supabase
 let teams = {annotation:[],assessment:[]};
 let dbRows = [];   // flat array from Neon
 let lastReport = [];
@@ -2017,13 +2018,34 @@ function exportHistoryCSV(filters={}){
 }
 
 // ══════════════════════════════════════════════════════════════
-//  EMPLOYEE MANAGEMENT  (stays in localStorage — same for all)
+//  EMPLOYEE MANAGEMENT  — stored in Supabase so all users share
 // ══════════════════════════════════════════════════════════════
-function loadTeams(){
-    try{const r=localStorage.getItem(LS_TEAMS);if(r){const p=JSON.parse(r);if(p&&p.annotation&&p.assessment){teams=p;return;}}}catch(e){}
+
+// Load teams from Supabase settings table; fall back to defaults if not set
+async function loadTeams(){
+    try{
+        const rows = await sbFetch(SETTINGS_TABLE+'?key=eq.teams&select=value');
+        if(rows && rows.length && rows[0].value){
+            const p = JSON.parse(rows[0].value);
+            if(p && p.annotation && p.assessment){ teams=p; return; }
+        }
+    }catch(e){ console.warn('loadTeams cloud failed, using defaults',e); }
+    // Fall back to defaults (first run or error)
     teams={annotation:[...DEFAULT_TEAMS.annotation],assessment:[...DEFAULT_TEAMS.assessment]};
 }
-function saveTeams(){try{localStorage.setItem(LS_TEAMS,JSON.stringify(teams));}catch(e){}}
+
+// Save teams to Supabase settings table (upsert)
+async function saveTeams(){
+    try{
+        await sbFetch(SETTINGS_TABLE+'?key=eq.teams', {
+            method:'DELETE', prefer:'return=minimal'
+        });
+        await sbFetch(SETTINGS_TABLE, {
+            method:'POST', prefer:'return=minimal',
+            body: JSON.stringify({key:'teams', value: JSON.stringify(teams)})
+        });
+    }catch(e){ console.error('saveTeams cloud failed',e); showToast('⚠️ Could not save employee list to cloud'); }
+}
 
 function renderEmpGrid(){
     const list=[...teams[activeEmpTab]].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
@@ -2048,27 +2070,27 @@ function switchEmpTab(t){
     renderEmpGrid();
 }
 
-function addEmployee(){
+async function addEmployee(){
     const input=document.getElementById('newEmpInput');
     const team=document.getElementById('newEmpTeam').value;
     const name=input.value.trim();
     input.classList.remove('shake');
     if(!name){void input.offsetWidth;input.classList.add('shake');input.focus();return;}
     if(allEmployees().some(e=>e.toLowerCase()===name.toLowerCase())){showToast(`⚠️ "${name}" already exists`);input.select();return;}
-    teams[team].push(name);saveTeams();switchEmpTab(team);input.value='';input.focus();
+    teams[team].push(name); await saveTeams(); switchEmpTab(team); input.value=''; input.focus();
     showToast(`✅ "${name}" added to ${teamLabel(team)}`);
 }
 
 function confirmRemove(name,team){
-    openConfirm('Remove Employee',`Remove <strong>${esc(name)}</strong> from ${teamLabel(team)}?`,()=>{
-        teams[team]=teams[team].filter(e=>e!==name);saveTeams();renderEmpGrid();showToast(`🗑️ "${name}" removed`);
+    openConfirm('Remove Employee',`Remove <strong>${esc(name)}</strong> from ${teamLabel(team)}?`, async ()=>{
+        teams[team]=teams[team].filter(e=>e!==name); await saveTeams(); renderEmpGrid(); showToast(`🗑️ "${name}" removed`);
     });
 }
 
 function resetToDefaults(){
-    openConfirm('Reset to Defaults','Replace both team lists with the original default employees?',()=>{
+    openConfirm('Reset to Defaults','Replace both team lists with the original default employees?', async ()=>{
         teams={annotation:[...DEFAULT_TEAMS.annotation],assessment:[...DEFAULT_TEAMS.assessment]};
-        saveTeams();renderEmpGrid();showToast('↩ Reset to defaults');
+        await saveTeams(); renderEmpGrid(); showToast('↩ Reset to defaults');
     });
 }
 
@@ -3734,8 +3756,11 @@ async function initApp(){
 
     initDarkMode();
     initKeyboardShortcuts();
-    loadTeams(); renderEmpGrid();
     document.getElementById('reportDate').value = new Date().toISOString().split('T')[0];
+    // Load teams from cloud first so employee list is same for all users
+    setSyncStatus('loading','⏳ Loading settings…');
+    await loadTeams();
+    renderEmpGrid();
     await loadFromCloud();
 
     document.getElementById('empPanelToggle').addEventListener('click',()=>{
