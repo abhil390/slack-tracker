@@ -580,7 +580,7 @@
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
         </div>
-        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.7</span></h1>
+        <h1>📋 Slack Login/Logout Tracker <span class="status-badge status-complete">v12.8</span></h1>
         <p>Shared history between both users — powered by Supabase cloud database</p>
     </div>
 
@@ -698,6 +698,10 @@
             <div id="todayViolPane">
                 <div class="history-summary" id="histSummary"></div>
                 <div class="history-toolbar" style="flex-wrap:wrap;gap:8px;">
+                    <label>📅 Date:</label>
+                    <select id="histDateFilter" onchange="onHistDateFilterChange()" style="min-width:200px;padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;">
+                        <option value="">— All Dates —</option>
+                    </select>
                     <label>Team:</label>
                     <select id="histTeamFilter">
                         <option value="all">All Teams</option>
@@ -1056,7 +1060,7 @@
 // ══════════════════════════════════════════════════════════════
 const USERS = [
     { username: 'admin',   password: 'Admin@123',  displayName: 'Admin' },
-    { username: 'ramyashree.ragupathy@camcom.ai',   password: 'ramya@camcom',  displayName: 'User 2' }
+    { username: 'user2',   password: 'User2@456',  displayName: 'User 2' }
 ];
 // To add more users, copy a line above and change the details.
 // Example: { username: 'john', password: 'John@789', displayName: 'John' }
@@ -1375,7 +1379,16 @@ async function loadFromCloud(){
         dbRows = Array.isArray(rawRows) ? rawRows : [];
         const active = dbRows.filter(r=>r.resolution==='violation').length;
         loadFromCloud._retries = 0;
+
+        // ── Auto-set lastProcessedDate to most recent date in DB ──
+        // This ensures other PCs see violations without having to process first
+        if(!lastProcessedDate && dbRows.length){
+            const dates = [...new Set(dbRows.map(r=>r.date))].sort();
+            lastProcessedDate = dates[dates.length-1]; // most recent date
+        }
+
         setSyncStatus('ok','✅ Connected — '+active+' active violation'+(active!==1?'s':'')+' | '+dbRows.length+' total records.');
+        updateTodayViolTabLabel();
         renderHistory(getHistFilters());
         renderDateManager();
         refreshAttendDateSelect();
@@ -1599,28 +1612,59 @@ function updateHistBadge(){
 // ══════════════════════════════════════════════════════════════
 function renderDateManager(){
     const sel = document.getElementById('dateSelect');
-    if(!sel) return;
+    if(sel){
+        const prev = sel.value;
+        const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
+        sel.innerHTML = '<option value="">— Select a date —</option>';
+        dates.forEach(date=>{
+            const rows   = dbRows.filter(r=>r.date===date);
+            const active = rows.filter(isActive).length;
+            const total  = rows.length;
+            const opt    = document.createElement('option');
+            opt.value    = date;
+            opt.textContent = formatDate(date) + '  (' + active + ' active / ' + total + ' total)';
+            sel.appendChild(opt);
+        });
+        if(prev && dates.includes(prev)) sel.value = prev;
+        onDateSelectChange();
+    }
 
-    // Remember current selection
-    const prev = sel.value;
+    // Also populate the violations tab date filter
+    const histSel = document.getElementById('histDateFilter');
+    if(histSel){
+        const prevHist = histSel.value;
+        const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
+        histSel.innerHTML = '<option value="">— All Dates —</option>';
+        dates.forEach(date=>{
+            const rows   = dbRows.filter(r=>r.date===date);
+            const active = rows.filter(isActive).length;
+            const opt    = document.createElement('option');
+            opt.value    = date;
+            opt.textContent = formatDate(date) + ' (' + active + ' active)';
+            histSel.appendChild(opt);
+        });
+        // Auto-select the lastProcessedDate
+        if(lastProcessedDate && dates.includes(lastProcessedDate)){
+            histSel.value = lastProcessedDate;
+        } else if(prevHist && dates.includes(prevHist)){
+            histSel.value = prevHist;
+        } else if(dates.length){
+            histSel.value = dates[0]; // most recent
+        }
+    }
+}
 
-    // Get unique dates sorted newest first
-    const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
-
-    sel.innerHTML = '<option value="">— Select a date —</option>';
-    dates.forEach(date=>{
-        const rows   = dbRows.filter(r=>r.date===date);
-        const active = rows.filter(isActive).length;
-        const total  = rows.length;
-        const opt    = document.createElement('option');
-        opt.value    = date;
-        opt.textContent = formatDate(date) + '  (' + active + ' active / ' + total + ' total)';
-        sel.appendChild(opt);
-    });
-
-    // Restore previous selection if still valid
-    if(prev && dates.includes(prev)) sel.value = prev;
-    onDateSelectChange();
+function onHistDateFilterChange(){
+    const sel = document.getElementById('histDateFilter');
+    const dateStr = sel ? sel.value : '';
+    if(dateStr){
+        lastProcessedDate = dateStr;
+        updateTodayViolTabLabel();
+    } else {
+        lastProcessedDate = '';
+        updateTodayViolTabLabel();
+    }
+    renderHistory(getHistFilters());
 }
 
 function onDateSelectChange(){
@@ -1842,11 +1886,19 @@ function renderHistory(filters={}){
     const {team='all',type='all',from='',to=''}=filters;
     let violations=[...dbRows];
 
-    // On "Today's Violations" tab, show the last processed date's violations
-    // Falls back to actual today if no date has been processed yet
+    // On "Today's Violations" tab, filter by selected date in dropdown
     if(_activeHistTab==='today'){
-        const showDate = lastProcessedDate || new Date().toISOString().split('T')[0];
-        violations = violations.filter(v=>v.date===showDate);
+        const histSel = document.getElementById('histDateFilter');
+        const selDate = histSel ? histSel.value : '';
+        const showDate = selDate || lastProcessedDate;
+        if(showDate){
+            violations = violations.filter(v=>v.date===showDate);
+        }
+        // If no date selected at all, show most recent date in DB
+        else if(dbRows.length){
+            const latestDate = [...new Set(dbRows.map(r=>r.date))].sort().reverse()[0];
+            violations = violations.filter(v=>v.date===latestDate);
+        }
     }
 
     if(team!=='all')           violations=violations.filter(v=>v.team===team);
@@ -3433,7 +3485,11 @@ function switchHistTab(tab){
 function updateTodayViolTabLabel(){
     const showDate = lastProcessedDate || new Date().toISOString().split('T')[0];
     const btn = document.getElementById('tabTodayViol');
-    if(btn) btn.textContent = '📅 ' + formatDateWithDay(showDate) + ' Violations';
+    if(!btn) return;
+    const isToday = showDate === new Date().toISOString().split('T')[0];
+    btn.textContent = isToday
+        ? '📅 Today — ' + formatDate(showDate)
+        : '📅 Latest — ' + formatDateWithDay(showDate);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3783,6 +3839,10 @@ async function initApp(){
     document.getElementById('histResetFilterBtn').addEventListener('click',()=>{
         ['histTeamFilter','histTypeFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all';});
         ['histFromDate','histToDate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+        // Reset to latest date
+        const histSel = document.getElementById('histDateFilter');
+        if(histSel && histSel.options.length > 1) histSel.value = histSel.options[1].value;
+        if(histSel) { lastProcessedDate = histSel.value; updateTodayViolTabLabel(); }
         renderHistory();
     });
     document.getElementById('histExportBtn').addEventListener('click',()=>exportHistoryCSV(getHistFilters()));
