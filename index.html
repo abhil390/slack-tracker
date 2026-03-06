@@ -2814,7 +2814,7 @@ function renderStats(){
     {l:'Employees',v:can('seeAll')?employees.length:visibleProjects().reduce((s,p)=>{(p.assignedEmployees||[]).forEach(id=>s.add(id));(p.reviewEmployees||[]).forEach(id=>s.add(id));return s;},new Set()).size,s:can('seeAll')?`${asd} assigned`:'in your projects',c:'p',i:'fa-users'},
     {l:'Conflicts',v:cc.length,s:cc.length>0?`${[...multiAnnotators()].length} overloaded, ${[...dualRoleIds()].length} dual-role`:'All clear ✓',c:cc.length>0?'r':'g',i:'fa-exclamation-triangle'},
   ].map(x=>`<div class="sc ${x.c}"><div class="sc-l">${x.l}</div><div class="sc-v">${x.v}</div><div class="sc-s">${x.s}</div></div>`).join('');
-  document.getElementById('nb-p').textContent=projects.length;
+  document.getElementById('nb-p').textContent=can('seeAll')?projects.length:visibleProjects().length;
   document.getElementById('nb-e').textContent=employees.length;
   const cc2=conflicts();
   const cb=document.getElementById('cBanner');
