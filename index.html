@@ -1128,9 +1128,8 @@ function showMainApp(session){
 // ══════════════════════════════════════════════════════════════
 //  ⚙️  SUPABASE CONFIG  — create a NEW Supabase project and paste here
 // ══════════════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://soqinoyhzaneqtuotnmn.supabase.co';        // e.g. https://xxxx.supabase.co
-const SUPABASE_KEY = 'sb_publishable_T-sCZAVVsvs9rk5OJ3P5TA_cQJ4kgJ8'
-';  // eyJ...
+const SUPABASE_URL = 'https://soqinoyhzaneqtuotnmn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_T-sCZAVVsvs9rk5OJ3P5TA_cQJ4kgJ8';
 const TABLE        = 'violation_history';
 const ATTEND_TABLE = 'attendance_records';
 const SETTINGS_TABLE = 'app_settings';
@@ -1365,7 +1364,7 @@ async function runDiagnostic(){
 
 async function loadFromCloud(){
     // ── Guard: detect placeholder / missing connection string ──
-    if(!SUPABASE_URL || SUPABASE_URL.includes('PASTE_YOUR') || !SUPABASE_KEY || SUPABASE_KEY.includes('PASTE_YOUR')){
+    if(!SUPABASE_URL || SUPABASE_URL.includes('PASTE_YOUR') || !SUPABASE_KEY || SUPABASE_KEY.length < 10){
         setSyncStatus('error','⚠️ Supabase not configured. Paste your URL and anon key into SUPABASE_URL and SUPABASE_KEY.');
         const rb=document.getElementById('syncRetryBtn'); if(rb) rb.style.display='none';
         return;
