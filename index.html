@@ -575,7 +575,7 @@
     <div class="header">
         <div class="top-user-bar">
             <button id="darkModeBtn" onclick="toggleDarkMode()" title="Toggle dark mode">🌙</button>
-            <button class="btn btn-danger" id="masterDeleteBtn" onclick="openMasterDelete()" title="Delete all records for a specific date">🗑️ Delete Day Data</button>
+            <button class="btn btn-danger" id="masterDeleteBtn" onclick="openMasterDelete()" title="Delete all violation and leave records for a specific date">🗑️ Delete Day Data</button>
             <span style="color:rgba(255,255,255,.7);font-size:13px;">Logged in as:</span>
             <span class="login-user-badge" id="loggedUserBadge">👤 —</span>
             <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,255,255,.15);color:white;font-size:12px;padding:5px 14px;">🚪 Logout</button>
@@ -782,10 +782,10 @@
         </div>
     </div>
 
-    <!-- Attendance Tracker Panel -->
+    <!-- Attendance Tracker Panel (legacy / hidden in compact mode) -->
     <div class="panel" style="margin-top:24px;">
         <div class="panel-header" id="attendPanelToggle">
-            <h2>📊 Daily Attendance Tracker
+            <h2>📊 Daily Attendance Tracker (hidden in compact mode)
                 <span class="badge badge-blue" id="attendBadge">Select a date</span>
             </h2>
             <span class="toggle-icon">▼</span>
@@ -1016,7 +1016,7 @@
                 </div>
                 <div class="mdd-what">
                     <div class="mdd-what-item">🚨 All violation records for this date</div>
-                    <div class="mdd-what-item">📊 All attendance records for this date</div>
+                    <div class="mdd-what-item">🗂️ All violation / leave records for this date</div>
                     <div class="mdd-what-item">✅ All resolved / ignored entries</div>
                 </div>
                 <p class="mdd-instruction">Type <strong>DELETE</strong> to confirm:</p>
@@ -1136,6 +1136,7 @@ const SUPABASE_URL = 'https://soqinoyhzaneqtuotnmn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_T-sCZAVVsvs9rk5OJ3P5TA_cQJ4kgJ8';
 const TABLE        = 'violation_history';
 const ATTEND_TABLE = 'attendance_records';
+const COMPACT_HISTORY_MODE = true;
 const SETTINGS_TABLE = 'app_settings';
 
 // ══════════════════════════════════════════════════════════════
@@ -1377,8 +1378,7 @@ async function loadFromCloud(){
     try{
         const rawRows = await dbLoad();
         dbRows = Array.isArray(rawRows) ? rawRows : [];
-        const attendanceDates = await dbLoadAttendanceDates().catch(()=>[]);
-        attendanceDateCache = [...new Set((Array.isArray(attendanceDates) ? attendanceDates : []).map(r=>r.date).filter(Boolean))].sort().reverse();
+        attendanceDateCache = [];
         const active = dbRows.filter(r=>r.resolution==='violation').length;
         loadFromCloud._retries = 0;
 
@@ -1448,29 +1448,24 @@ function buildSlackAttendanceRows(dateStr, report){
 async function saveViolationsForDate(dateStr, report){
     setSyncStatus('loading','Saving to cloud…');
     try{
-        // ── Step 1: Delete existing rows for this date from both tables ──
+        // ── Step 1: Delete existing compact history rows for this date ──
         await dbDeleteByDate(dateStr);
-        await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr)+'&source=eq.slack',{method:'DELETE'}).catch(()=>{});
 
-        // Remove this date from local violation cache immediately
+        // Remove this date from local cache immediately
         dbRows = dbRows.filter(r => r.date !== dateStr);
 
-        // ── Step 2: Save full attendance snapshot to attendance_records ──
-        const attendanceRows = buildSlackAttendanceRows(dateStr, report);
-        if(attendanceRows.length){
-            await dbBulkInsertAttendance(attendanceRows);
-        }
-
-        // ── Step 3: Save only rows that matter for violation history ──
+        // ── Step 2: Save only leaves + actionable issues ──
         const fresh = report
             .map(r => {
                 const cleanLogin  = (r.login  === '❌ No login'  || r.login  === '-') ? '' : (r.login  || '');
                 const cleanLogout = (r.logout === '❌ No logout' || r.logout === '-') ? '' : (r.logout || '');
-                const isViol      = r.status === 'Missing';
+                const isMissing   = r.status === 'Missing';
+                const isHalfDay   = r.status === 'Half Day';
+                const isShortDay  = r.status === 'Full Day' && !!r.shortHours;
                 const isOnLeave   = r.status === 'On Leave';
                 const isMaternity = r.status === 'Maternity';
                 const isMenstrual = r.status === 'Menstrual';
-                if(!(isViol || isOnLeave || isMaternity || isMenstrual)) return null;
+                if(!(isMissing || isHalfDay || isShortDay || isOnLeave || isMaternity || isMenstrual)) return null;
 
                 let resolution = 'violation', reason = '', resolved_at = '';
                 if(isOnLeave){
@@ -1479,6 +1474,10 @@ async function saveViolationsForDate(dateStr, report){
                     resolution='Maternity'; reason='Maternity leave'; resolved_at=new Date().toLocaleString();
                 } else if(isMenstrual){
                     resolution='Menstrual'; reason='Menstrual leave'; resolved_at=new Date().toLocaleString();
+                } else if(isShortDay){
+                    reason='Short working hours';
+                } else if(isHalfDay){
+                    reason='Less working time';
                 }
                 return {
                     date:          dateStr,
@@ -1495,10 +1494,10 @@ async function saveViolationsForDate(dateStr, report){
             })
             .filter(Boolean);
 
-        // ── Step 4: Bulk insert compact violation history ──
+        // ── Step 3: Bulk insert compact violation history ──
         const inserted = fresh.length ? await dbBulkInsertViolations(fresh) : [];
 
-        // ── Step 5: Update local cache with newly inserted rows ──
+        // ── Step 4: Update local cache with newly inserted rows ──
         if(Array.isArray(inserted)){
             inserted.forEach(row => {
                 const idx = dbRows.findIndex(d=>d.date===row.date && d.name===row.name);
@@ -1506,12 +1505,8 @@ async function saveViolationsForDate(dateStr, report){
             });
         }
 
-        if(!attendanceDateCache.includes(dateStr)){
-            attendanceDateCache = [...attendanceDateCache, dateStr].sort().reverse();
-        }
-
         const active = dbRows.filter(r=>r.resolution==='violation').length;
-        setSyncStatus('ok','✅ Saved — '+active+' active violation'+(active!==1?'s':'')+' in cloud. Compact history mode is on.');
+        setSyncStatus('ok','✅ Saved — '+active+' active issue'+(active!==1?'s':'')+' in cloud. Full-day records are ignored.');
         renderHistory(getHistFilters());
         renderDateManager();
         refreshAttendDateSelect();
@@ -1817,21 +1812,18 @@ function closeEditModal(){ document.getElementById('editOverlay').classList.remo
 async function excuseShortHours(date, name){
     const reason = prompt(`Reason for excusing short hours for ${name} on ${formatDate(date)}:
 (leave blank to just mark as excused)`);
-    if(reason === null) return; // cancelled
+    if(reason === null) return;
     const tag = '[Short Hours Excused] ' + (reason.trim() || 'Permission granted');
-    // Find the dbRow and update its reason field — keep existing resolution (present)
     const row = dbRows.find(r=>r.name===name && r.date===date);
     if(!row){ showToast('⚠️ No record found in DB for this employee on this date. Process the date first.'); return; }
-    await saveResolutionToCloud(date, name, row.resolution || 'present', tag);
+    await saveResolutionToCloud(date, name, 'Ignored', tag);
     showToast(`✅ Short hours excused for ${name}`);
 }
 
 async function unexcuseShortHours(date, name){
-    // Remove the excused tag — keep resolution, clear reason
     const row = dbRows.find(r=>r.name===name && r.date===date);
     if(!row) return;
-    const newReason = (row.reason||'').replace(/\[Short Hours Excused\][^\]]*\]?[^[).]*/g,'').trim();
-    await saveResolutionToCloud(date, name, row.resolution || 'present', newReason);
+    await saveResolutionToCloud(date, name, 'violation', row.status==='Half Day' ? 'Less working time' : 'Short working hours');
     showToast(`↩️ Short hours excuse removed for ${name}`);
 }
 
@@ -1998,9 +1990,15 @@ function renderHistory(filters={}){
             const reasonHtml=v.reason?`<div class="res-reason">💬 ${esc(v.reason)}</div>`:'';
             const resolvedAtHtml=v.resolved_at?`<div class="res-reason">🕐 ${v.resolved_at}</div>`:'';
 
+            const statusIcon = v.status==='Missing' ? '❓' : (v.status==='Half Day' ? '🌓' : '⚠️');
             const statusHtml=res==='violation'
-                ?`<span class="status-badge status-${v.status.toLowerCase()}">${v.status==='Missing'?'❓':'⚠️'} ${v.status}</span>`
+                ?`<span class="status-badge status-${v.status.toLowerCase().replace(/\s+/g,'-')}">${statusIcon} ${v.status}</span>`
                 :`${resBadge}<div style="font-size:11px;color:#888;margin-top:3px;">was: ${v.status}</div>`;
+            const isShortIssue = v.status==='Full Day' || v.status==='Half Day';
+            const shortExcused = isShortIssue && isShortHoursExcused(v.name, v.date);
+            const actionHtml = isShortIssue
+                ? `${res==='violation' && !shortExcused ? `<button class="btn btn-xs btn-success" style="margin-right:4px;" onclick="excuseShortHours('${v.date}','${v.name.replace(/'/g,"\'")}')">✅ Excuse</button>` : ''}${shortExcused ? `<button class="btn btn-xs btn-secondary" style="margin-right:4px;" onclick="unexcuseShortHours('${v.date}','${v.name.replace(/'/g,"\'")}')">↩️ Remove</button>` : ''}<button class="btn btn-xs btn-secondary" onclick="openEditModal('${v.date}','${v.name.replace(/'/g,"\'")}')">✏️ Edit</button>`
+                : `<button class="btn btn-xs btn-secondary" onclick="openEditModal('${v.date}','${v.name.replace(/'/g,"\'")}')">✏️ Edit</button>`;
 
             return`<tr class="${rowClass}">
                 <td>${formatDate(v.date)}</td>
@@ -2008,8 +2006,7 @@ function renderHistory(filters={}){
                 <td><span class="time-badge">${v.login}</span></td>
                 <td><span class="time-badge">${v.logout}</span></td>
                 <td>${v.working_hours}</td>
-                <td><button class="btn btn-xs btn-secondary"
-                    onclick="openEditModal('${v.date}','${v.name.replace(/'/g,"\\'")}')">✏️ Edit</button></td>
+                <td>${actionHtml}</td>
             </tr>`;
         }).join('');
 
@@ -2503,7 +2500,7 @@ let attendanceDateCache = []; // dates present in attendance_records
 function refreshAttendDateSelect(){
     const sel = document.getElementById('attendDateSelect');
     const prev = sel.value;
-    const allDates = [...new Set([...dbRows.map(r=>r.date), ...attendanceDateCache])].filter(Boolean).sort().reverse();
+    const allDates = [...new Set(dbRows.map(r=>r.date))].filter(Boolean).sort().reverse();
     sel.innerHTML = '<option value="">— Pick a date —</option>';
     allDates.forEach(d=>{
         const opt = document.createElement('option');
@@ -2689,7 +2686,7 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
         const empDbRows = dbRows.filter(r=>r.name===empName);
 
         // All dates = union of attendance + compact violation history
-        let allDates = [...new Set([...attendanceRows.map(r=>r.date), ...empDbRows.map(r=>r.date)])].sort().reverse();
+        let allDates = [...new Set(empDbRows.map(r=>r.date))].sort().reverse();
         if(fromDate) allDates = allDates.filter(d=>d>=fromDate);
         if(toDate)   allDates = allDates.filter(d=>d<=toDate);
 
@@ -3124,7 +3121,7 @@ function updateMasterDeleteBtn(dateStr){
 }
 
 function openMasterDelete(){
-    const dataDates = new Set([...dbRows.map(r=>r.date), ...attendanceDateCache]);
+    const dataDates = new Set(dbRows.map(r=>r.date));
     if(!dataDates.size){ showToast('No recorded data to delete yet.'); return; }
 
     // Open to current month (or month of selected date)
@@ -3162,7 +3159,7 @@ function mddCalMove(dir){
 }
 
 function renderMddCalendar(){
-    const dataDates = new Set([...dbRows.map(r=>r.date), ...attendanceDateCache]);
+    const dataDates = new Set(dbRows.map(r=>r.date));
     const today     = new Date().toISOString().split('T')[0];
 
     const title = new Date(_mddCalYear, _mddCalMonth, 1)
@@ -3901,18 +3898,14 @@ async function initApp(){
         document.getElementById('clearOverlay').classList.remove('open');
         setSyncStatus('loading','Deleting all records…');
         try{
-            // Delete violation_history and attendance_records in parallel
-            await Promise.all([
-                dbDeleteAll(),
-                sbFetch(ATTEND_TABLE+'?id=neq.00000000-0000-0000-0000-000000000000',{method:'DELETE'}).catch(()=>{})
-            ]);
+            await dbDeleteAll();
             await loadFromCloud();
             attendRows = [];
             attendanceDateCache = [];
             document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
             document.getElementById('attendSummary').innerHTML='';
             document.getElementById('attendDateSelect').innerHTML='<option value="">— Pick a date —</option>';
-            showToast('🗑️ All history cleared.');
+            showToast('🗑️ All violation / leave history cleared.');
         }
         catch(e){ setSyncStatus('error','Delete failed: '+e.message); }
     });
