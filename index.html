@@ -1377,6 +1377,8 @@ async function loadFromCloud(){
     try{
         const rawRows = await dbLoad();
         dbRows = Array.isArray(rawRows) ? rawRows : [];
+        const attendanceDates = await dbLoadAttendanceDates().catch(()=>[]);
+        attendanceDateCache = [...new Set((Array.isArray(attendanceDates) ? attendanceDates : []).map(r=>r.date).filter(Boolean))].sort().reverse();
         const active = dbRows.filter(r=>r.resolution==='violation').length;
         loadFromCloud._retries = 0;
 
@@ -1424,58 +1426,79 @@ async function loadFromCloud(){
 // ══════════════════════════════════════════════════════════════
 //  SAVE VIOLATIONS TO CLOUD
 // ══════════════════════════════════════════════════════════════
+function buildSlackAttendanceRows(dateStr, report){
+    return report.map(r => {
+        const cleanLogin  = (r.login  === '❌ No login'  || r.login  === '-') ? '' : (r.login  || '');
+        const cleanLogout = (r.logout === '❌ No logout' || r.logout === '-') ? '' : (r.logout || '');
+        let status = r.status;
+        if(r.status === 'Missing') status = 'Not Recorded';
+        return {
+            date: dateStr,
+            name: r.name,
+            team: r.team,
+            status,
+            login: cleanLogin,
+            logout: cleanLogout,
+            notes: '',
+            source: 'slack'
+        };
+    });
+}
+
 async function saveViolationsForDate(dateStr, report){
     setSyncStatus('loading','Saving to cloud…');
     try{
-        // ── Step 1: Delete ALL existing rows for this date (both tables) ──
+        // ── Step 1: Delete existing rows for this date from both tables ──
         await dbDeleteByDate(dateStr);
         await sbFetch(ATTEND_TABLE+'?date=eq.'+encodeURIComponent(dateStr)+'&source=eq.slack',{method:'DELETE'}).catch(()=>{});
 
-        // Remove from local cache immediately
+        // Remove this date from local violation cache immediately
         dbRows = dbRows.filter(r => r.date !== dateStr);
 
-        // ── Step 2: Build fresh rows for every employee ──
-        const fresh = report.map(r => {
-            const cleanLogin  = (r.login  === '❌ No login'  || r.login  === '-') ? '' : (r.login  || '');
-            const cleanLogout = (r.logout === '❌ No logout' || r.logout === '-') ? '' : (r.logout || '');
-            // Map status → resolution correctly for all special cases
-            const isViol      = r.status === 'Missing';
-            const isWeekOff   = r.status === 'Week Off'   || r.autoWeekOff;
-            const isOnLeave   = r.status === 'On Leave';
-            const isMaternity = r.status === 'Maternity';
-            const isMenstrual = r.status === 'Menstrual';
-            let resolution, reason, resolved_at;
-            if(isWeekOff){
-                resolution='Week Off'; reason='[Auto] Weekend week off'; resolved_at=new Date().toLocaleString();
-            } else if(isOnLeave){
-                resolution='On Leave'; reason='On Leave'; resolved_at=new Date().toLocaleString();
-            } else if(isMaternity){
-                resolution='Maternity'; reason='Maternity leave'; resolved_at=new Date().toLocaleString();
-            } else if(isMenstrual){
-                resolution='Menstrual'; reason='Menstrual leave'; resolved_at=new Date().toLocaleString();
-            } else if(isViol){
-                resolution='violation'; reason=''; resolved_at='';
-            } else {
-                resolution='present'; reason=''; resolved_at='';
-            }
-            return {
-                date:          dateStr,
-                name:          r.name,
-                team:          r.team,
-                status:        r.status,
-                login:         cleanLogin,
-                logout:        cleanLogout,
-                working_hours: r.workingHours || '-',
-                resolution,
-                reason,
-                resolved_at
-            };
-        });
+        // ── Step 2: Save full attendance snapshot to attendance_records ──
+        const attendanceRows = buildSlackAttendanceRows(dateStr, report);
+        if(attendanceRows.length){
+            await dbBulkInsertAttendance(attendanceRows);
+        }
 
-        // ── Step 3: Bulk insert all in ONE request ──
+        // ── Step 3: Save only rows that matter for violation history ──
+        const fresh = report
+            .map(r => {
+                const cleanLogin  = (r.login  === '❌ No login'  || r.login  === '-') ? '' : (r.login  || '');
+                const cleanLogout = (r.logout === '❌ No logout' || r.logout === '-') ? '' : (r.logout || '');
+                const isViol      = r.status === 'Missing';
+                const isOnLeave   = r.status === 'On Leave';
+                const isMaternity = r.status === 'Maternity';
+                const isMenstrual = r.status === 'Menstrual';
+                if(!(isViol || isOnLeave || isMaternity || isMenstrual)) return null;
+
+                let resolution = 'violation', reason = '', resolved_at = '';
+                if(isOnLeave){
+                    resolution='On Leave'; reason='On Leave'; resolved_at=new Date().toLocaleString();
+                } else if(isMaternity){
+                    resolution='Maternity'; reason='Maternity leave'; resolved_at=new Date().toLocaleString();
+                } else if(isMenstrual){
+                    resolution='Menstrual'; reason='Menstrual leave'; resolved_at=new Date().toLocaleString();
+                }
+                return {
+                    date:          dateStr,
+                    name:          r.name,
+                    team:          r.team,
+                    status:        r.status,
+                    login:         cleanLogin,
+                    logout:        cleanLogout,
+                    working_hours: r.workingHours || '-',
+                    resolution,
+                    reason,
+                    resolved_at
+                };
+            })
+            .filter(Boolean);
+
+        // ── Step 4: Bulk insert compact violation history ──
         const inserted = fresh.length ? await dbBulkInsertViolations(fresh) : [];
 
-        // ── Step 4: Update local cache with newly inserted rows (have real IDs now) ──
+        // ── Step 5: Update local cache with newly inserted rows ──
         if(Array.isArray(inserted)){
             inserted.forEach(row => {
                 const idx = dbRows.findIndex(d=>d.date===row.date && d.name===row.name);
@@ -1483,8 +1506,12 @@ async function saveViolationsForDate(dateStr, report){
             });
         }
 
+        if(!attendanceDateCache.includes(dateStr)){
+            attendanceDateCache = [...attendanceDateCache, dateStr].sort().reverse();
+        }
+
         const active = dbRows.filter(r=>r.resolution==='violation').length;
-        setSyncStatus('ok','✅ Saved — '+active+' active violation'+(active!==1?'s':'')+' in cloud.');
+        setSyncStatus('ok','✅ Saved — '+active+' active violation'+(active!==1?'s':'')+' in cloud. Compact history mode is on.');
         renderHistory(getHistFilters());
         renderDateManager();
         refreshAttendDateSelect();
@@ -2470,13 +2497,13 @@ Remarks: half hour extra.`;
 let attendRows = [];        // current date's attendance rows from DB
 let attendCurrentDate = ''; // currently selected date
 let attendEditId = null;    // id of row being edited (null = new)
+let attendanceDateCache = []; // dates present in attendance_records
 
 // Populate attendance date dropdown — merge violation dates + attendance dates
 function refreshAttendDateSelect(){
-    // Dates come from dbRows (already in memory — no extra DB call needed)
     const sel = document.getElementById('attendDateSelect');
     const prev = sel.value;
-    const allDates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
+    const allDates = [...new Set([...dbRows.map(r=>r.date), ...attendanceDateCache])].filter(Boolean).sort().reverse();
     sel.innerHTML = '<option value="">— Pick a date —</option>';
     allDates.forEach(d=>{
         const opt = document.createElement('option');
@@ -2507,7 +2534,7 @@ async function loadAttendance(){
     document.getElementById('attendExportBtn').disabled = false;
     document.getElementById('attendContent').innerHTML = '<div class="no-attend">Loading…</div>';
     try{
-        // Only load manual overrides — auto attendance is derived from dbRows in memory
+        // Load both manual overrides and saved Slack attendance for this date
         attendRows = await dbLoadAttendance(dateStr);
         populateAttendEmpFilter(); // refresh employee list
         renderAttendance(dateStr);
@@ -2653,14 +2680,16 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
     content.innerHTML = '<div class="no-attend">Loading history…</div>';
 
     try{
-        // Load manual overrides from attendance_records for this employee
-        const manualRows = await sbFetch(ATTEND_TABLE+'?name=eq.'+encodeURIComponent(empName)+'&source=eq.manual&order=date.desc&select=*').catch(()=>[]);
+        // Load attendance records from attendance_records for this employee
+        const attendanceRows = await sbFetch(ATTEND_TABLE+'?name=eq.'+encodeURIComponent(empName)+'&order=date.desc&select=*').catch(()=>[]);
+        const manualRows = attendanceRows.filter(r=>r.source==='manual');
+        const slackRows  = attendanceRows.filter(r=>r.source==='slack');
 
-        // All employee records now stored in dbRows (violation_history table)
+        // Compact violation history keeps only exceptions / resolved violations
         const empDbRows = dbRows.filter(r=>r.name===empName);
 
-        // All dates = union of both sources, filtered by range if set
-        let allDates = [...new Set([...manualRows.map(r=>r.date), ...empDbRows.map(r=>r.date)])].sort().reverse();
+        // All dates = union of attendance + compact violation history
+        let allDates = [...new Set([...attendanceRows.map(r=>r.date), ...empDbRows.map(r=>r.date)])].sort().reverse();
         if(fromDate) allDates = allDates.filter(d=>d>=fromDate);
         if(toDate)   allDates = allDates.filter(d=>d<=toDate);
 
@@ -2675,7 +2704,11 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
             const manual = manualRows.find(r=>r.date===date);
             if(manual) return {...manual, isManual:true};
 
-            // Use violation_history row (now stores everyone)
+            // Saved Slack attendance is the primary source in compact mode
+            const slack = slackRows.find(r=>r.date===date);
+            if(slack) return {...slack};
+
+            // Fallback to compact violation history row
             const row = empDbRows.find(r=>r.date===date);
             if(row){
                 // Map resolution to attendance status
@@ -2770,7 +2803,11 @@ function renderAttendance(dateStr){
         const manual = attendRows.find(r=>r.name===e.name && r.source==='manual');
         if(manual) return {...manual};
 
-        // 2. Use in-memory lastReport if this is the currently processed date (instant, no DB needed)
+        // 2. Saved Slack attendance for this date
+        const slackRow = attendRows.find(r=>r.name===e.name && r.source==='slack');
+        if(slackRow) return {...slackRow};
+
+        // 3. Use in-memory lastReport if this is the currently processed date (instant, no DB needed)
         if(isCurrentDate){
             const rep = lastReport.find(r=>r.name===e.name);
             if(rep){
@@ -2787,7 +2824,7 @@ function renderAttendance(dateStr){
             return { name:e.name, team:e.team, date:dateStr, status:'Not Recorded', login:'', logout:'', notes:'', source:'slack', id:null };
         }
 
-        // 3. For past dates: all employees now stored in dbRows
+        // 4. Fallback for older dates before compact mode migration
         const viol = dbRows.find(r=>r.date===dateStr && r.name===e.name);
         if(viol){
             // Map resolution → attendance status
@@ -2813,7 +2850,7 @@ function renderAttendance(dateStr){
                 notes:'', source:'slack', id:null, resolution:viol.resolution };
         }
 
-        // Auto Week Off for Annotation team on weekends even with no data
+        // 5. Auto Week Off for Annotation team on weekends even with no data
         if(isAutoWeekOff(e.name, e.team, dateStr)){
             return { name:e.name, team:e.team, date:dateStr, status:'Week Off', login:'', logout:'', notes:'', source:'auto', id:null };
         }
@@ -3087,7 +3124,7 @@ function updateMasterDeleteBtn(dateStr){
 }
 
 function openMasterDelete(){
-    const dataDates = new Set(dbRows.map(r=>r.date));
+    const dataDates = new Set([...dbRows.map(r=>r.date), ...attendanceDateCache]);
     if(!dataDates.size){ showToast('No recorded data to delete yet.'); return; }
 
     // Open to current month (or month of selected date)
@@ -3125,7 +3162,7 @@ function mddCalMove(dir){
 }
 
 function renderMddCalendar(){
-    const dataDates = new Set(dbRows.map(r=>r.date));
+    const dataDates = new Set([...dbRows.map(r=>r.date), ...attendanceDateCache]);
     const today     = new Date().toISOString().split('T')[0];
 
     const title = new Date(_mddCalYear, _mddCalMonth, 1)
@@ -3871,6 +3908,7 @@ async function initApp(){
             ]);
             await loadFromCloud();
             attendRows = [];
+            attendanceDateCache = [];
             document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
             document.getElementById('attendSummary').innerHTML='';
             document.getElementById('attendDateSelect').innerHTML='<option value="">— Pick a date —</option>';
