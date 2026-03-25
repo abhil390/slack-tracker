@@ -280,6 +280,7 @@
         .ab-weekoff{background:#e8d5ff;color:#5a32a3;}
         .attend-weekoff td:first-child{border-left:4px solid #8e44ad;}
         .res-badge.res-weekoff{background:#e8d5ff;color:#5a32a3;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
+        .res-badge.res-holiday{background:#fff3e0;color:#e65100;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:600;}
         .res-option.selected-weekoff{border-color:#8e44ad;background:#f5f0ff;}
         .ab-manual{background:#e8d5ff;color:#5a32a3;font-size:10px;margin-left:4px;}
         .no-attend{padding:30px;text-align:center;color:#aaa;font-size:14px;}
@@ -546,6 +547,39 @@
         .login-user-badge{display:inline-flex;align-items:center;gap:6px;background:#e8f0fe;color:#1a4d8c;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;border:none;}
         .login-user-badge:hover{background:#d2e3fc;}
         .top-user-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:12px;}
+
+        /* ══ HOLIDAY CALENDAR ══ */
+        .holiday-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;}
+        .holiday-toolbar label{font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
+        .holiday-toolbar input[type=date],.holiday-toolbar input[type=text],.holiday-toolbar select{
+            padding:9px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;}
+        .holiday-toolbar input[type=date]:focus,.holiday-toolbar input[type=text]:focus,.holiday-toolbar select:focus{outline:none;border-color:#1a4d8c;}
+        .holiday-toolbar .hf-group{display:flex;flex-direction:column;min-width:140px;}
+        .holiday-type-tabs{display:flex;gap:8px;margin-bottom:14px;}
+        .holiday-type-tab{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid transparent;background:#f0f2f5;color:#555;transition:all .2s;}
+        .holiday-type-tab.active-public{background:#fff3e0;color:#e65100;border-color:#e65100;}
+        .holiday-type-tab.active-company{background:#e8f5e9;color:#2e7d32;border-color:#2e7d32;}
+        .holiday-type-tab.active-all{background:#e8f0fe;color:#1a4d8c;border-color:#1a4d8c;}
+        .holiday-list{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;padding-right:4px;}
+        .holiday-item{display:flex;align-items:center;gap:12px;background:#f8f9fa;border-radius:10px;padding:12px 16px;border:1px solid #e0e0e0;transition:background .15s;}
+        .holiday-item:hover{background:#eef0f3;}
+        .holiday-item.public{border-left:4px solid #e65100;}
+        .holiday-item.company{border-left:4px solid #2e7d32;}
+        .holiday-item .hd-date{font-weight:700;font-size:13px;color:#2c3e50;min-width:95px;}
+        .holiday-item .hd-day{font-size:11px;color:#888;min-width:60px;}
+        .holiday-item .hd-name{flex:1;font-size:13px;color:#333;}
+        .holiday-item .hd-type{font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;white-space:nowrap;}
+        .holiday-item .hd-type.public{background:#fff3e0;color:#e65100;}
+        .holiday-item .hd-type.company{background:#e8f5e9;color:#2e7d32;}
+        .holiday-item .hd-worked{font-size:11px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:#1a4d8c;font-weight:600;white-space:nowrap;}
+        .holiday-item .hd-remove{background:none;border:none;cursor:pointer;color:#ccc;font-size:17px;transition:color .15s;flex-shrink:0;}
+        .holiday-item .hd-remove:hover{color:#dc3545;}
+        .holiday-notice{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px 16px;font-size:13px;color:#5d4037;margin-bottom:14px;line-height:1.6;}
+        .holiday-empty{padding:30px;text-align:center;color:#aaa;font-size:14px;}
+        .holiday-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+        .hol-stat{background:#f8f9fa;border:1px solid #eee;border-radius:8px;padding:10px 16px;text-align:center;min-width:90px;}
+        .hol-stat .hv{font-size:20px;font-weight:bold;} .hol-stat .hl{font-size:11px;color:#999;text-transform:uppercase;}
+        .hol-stat.public .hv{color:#e65100;} .hol-stat.company .hv{color:#2e7d32;}
     </style>
 </head>
 <body>
@@ -679,6 +713,57 @@
         <div class="table-container"><div id="tableContainer"></div></div>
     </div>
 
+    <!-- ══ HOLIDAY CALENDAR ══ -->
+    <div class="panel" style="margin-top:20px;">
+        <div class="panel-header" id="holidayPanelToggle">
+            <h2>🗓️ Holiday Calendar
+                <span class="badge badge-blue" id="holidayCountBadge">0 holidays</span>
+            </h2>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div class="panel-body" id="holidayPanelBody">
+            <div class="holiday-notice">
+                📌 Set <strong>Public Holidays</strong> (government) and <strong>Company Holidays</strong> (office-declared). On these dates employees are auto-marked as <strong>Holiday</strong> — no violation. If someone worked anyway, their Slack data is stored normally and overrides the holiday status.
+                <br><br>⚠️ <strong>First time setup:</strong> Run this in your <a href="https://supabase.com/dashboard" target="_blank" style="color:#e65100;">Supabase SQL Editor</a>:<br>
+                <code style="font-size:11px;background:#f0f0f0;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;">create table if not exists holidays (id uuid primary key default gen_random_uuid(), date text not null unique, name text not null, type text not null); alter table holidays enable row level security; create policy "All" on holidays for all using (true) with check (true);</code>
+            </div>
+            <!-- Add new holiday row -->
+            <div class="holiday-toolbar">
+                <div class="hf-group">
+                    <label>Date</label>
+                    <input type="date" id="newHolDate"/>
+                </div>
+                <div class="hf-group" style="flex:1;min-width:160px;">
+                    <label>Holiday Name</label>
+                    <input type="text" id="newHolName" placeholder="e.g. Diwali, Company Outing…" style="width:100%;"/>
+                </div>
+                <div class="hf-group">
+                    <label>Type</label>
+                    <select id="newHolType">
+                        <option value="public">🟠 Public Holiday</option>
+                        <option value="company">🟢 Company Holiday</option>
+                    </select>
+                </div>
+                <div class="hf-group" style="justify-content:flex-end;">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary" onclick="addHoliday()">➕ Add Holiday</button>
+                </div>
+            </div>
+            <!-- Filter tabs -->
+            <div class="holiday-type-tabs">
+                <button class="holiday-type-tab active-all" id="holTabAll"     onclick="setHolFilter('all')">🗓️ All</button>
+                <button class="holiday-type-tab" id="holTabPublic"  onclick="setHolFilter('public')">🟠 Public</button>
+                <button class="holiday-type-tab" id="holTabCompany" onclick="setHolFilter('company')">🟢 Company</button>
+            </div>
+            <!-- Summary -->
+            <div class="holiday-summary" id="holSummary"></div>
+            <!-- List -->
+            <div class="holiday-list" id="holidayList">
+                <div class="holiday-empty">No holidays added yet.</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Violation History -->
     <div class="panel" style="margin-top:24px;">
         <div class="panel-header" id="histPanelToggle">
@@ -715,6 +800,7 @@
                         <option value="On Leave">On Leave</option>
                         <option value="Week Off">Week Off</option>
                         <option value="Ignored">Ignored</option>
+                        <option value="Holiday">🗓️ Holiday</option>
                     </select>
                     <button class="btn btn-secondary btn-sm" id="histFilterBtn">🔍 Filter</button>
                     <button class="btn btn-secondary btn-sm" id="histResetFilterBtn">✖ Reset</button>
@@ -740,6 +826,7 @@
                     <button class="btn-bulk bb-ignore-full" onclick="applyBulk('Ignored','[Full Day] Bulk action')">✅ Ignore Full</button>
                     <button class="btn-bulk bb-ignore-half" onclick="applyBulk('Ignored','[Half Day] Bulk action')">🌓 Ignore Half</button>
                     <button class="btn-bulk bb-weekoff"     onclick="applyBulk('Week Off','')">🏖️ Week Off</button>
+                    <button class="btn-bulk" style="background:#fff3e0;color:#e65100;" onclick="applyBulk('Holiday','Holiday')">🗓️ Holiday</button>
                     <button class="btn-bulk bb-maternity"   onclick="applyBulk('Maternity','Maternity leave')">🤱 Maternity</button>
                     <button class="btn-bulk bb-menstrual"   onclick="applyBulk('Menstrual','Menstrual leave')">🌸 Menstrual</button>
                 </div>
@@ -816,6 +903,9 @@
             </div>
             <div id="attendWeekendNotice" style="display:none;background:#f5f0ff;border:1px solid #c9a8ff;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:13px;color:#5a32a3;">
                 🏖️ <strong>Weekend:</strong> Data Annotation team is auto-marked as <strong>Week Off</strong>. If they worked, paste their Slack messages and process — it will override to their actual hours.
+            </div>
+            <div id="attendHolidayNotice" style="display:none;background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:13px;color:#e65100;">
+                🗓️ <strong id="attendHolidayLabel">Holiday:</strong> All employees are auto-marked as <strong>Holiday</strong>. If someone worked anyway, their Slack data is stored normally.
             </div>
             <div class="attend-summary" id="attendSummary"></div>
             <div class="attend-table-wrap">
@@ -949,6 +1039,11 @@
                     <div class="res-icon">🌸</div>
                     <div class="res-label">Menstrual Leave</div>
                     <div class="res-desc">Shows same as On Leave in attendance</div>
+                </div>
+                <div class="res-option" data-res="Holiday" id="resOptHoliday">
+                    <div class="res-icon">🗓️</div>
+                    <div class="res-label">Mark as Holiday</div>
+                    <div class="res-desc">Public or company holiday — not a violation</div>
                 </div>
             </div>
             <!-- Ignored sub-choice: Full Day or Half Day -->
@@ -1137,6 +1232,151 @@ const SUPABASE_KEY = 'sb_publishable_T-sCZAVVsvs9rk5OJ3P5TA_cQJ4kgJ8';
 const TABLE        = 'violation_history';
 const ATTEND_TABLE = 'attendance_records';
 const SETTINGS_TABLE = 'app_settings';
+const HOLIDAY_TABLE  = 'holidays';       // NEW: stores all holidays
+// ⚠️  CREATE THIS TABLE IN SUPABASE SQL EDITOR:
+// create table holidays (id uuid primary key default gen_random_uuid(), date text not null unique, name text not null, type text not null check (type in ('public','company')));
+// alter table holidays enable row level security;
+// create policy "Allow all" on holidays for all using (true) with check (true);
+
+// ══════════════════════════════════════════════════════════════
+//  HOLIDAY DATA  — in-memory cache, synced from Supabase
+// ══════════════════════════════════════════════════════════════
+let holidays = [];   // [{id, date, name, type: 'public'|'company'}]
+let _holFilter = 'all';
+
+// ── Supabase CRUD for holidays ──
+async function dbLoadHolidays(){
+    const r = await sbFetch(HOLIDAY_TABLE+'?order=date.asc&select=*');
+    return Array.isArray(r) ? r : [];
+}
+async function dbAddHoliday(h){
+    const {id,...payload} = h;
+    const r = await sbFetch(HOLIDAY_TABLE, {method:'POST', prefer:'return=representation', body:JSON.stringify(payload)});
+    return Array.isArray(r) ? r[0] : r;
+}
+async function dbDeleteHoliday(id){
+    await sbFetch(HOLIDAY_TABLE+'?id=eq.'+id, {method:'DELETE', prefer:'return=minimal'});
+}
+
+// Load holidays from cloud into memory
+async function loadHolidays(){
+    try{
+        holidays = await dbLoadHolidays();
+    } catch(e){
+        console.warn('loadHolidays failed:', e);
+        holidays = [];
+    }
+    renderHolidayList();
+}
+
+// Check if a date is a holiday — returns holiday object or null
+function getHoliday(dateStr){
+    return holidays.find(h => h.date === dateStr) || null;
+}
+
+// Check if date is any kind of holiday
+function isHoliday(dateStr){
+    return !!getHoliday(dateStr);
+}
+
+// Add a holiday, save to cloud, sync
+async function addHoliday(){
+    const dateEl = document.getElementById('newHolDate');
+    const nameEl = document.getElementById('newHolName');
+    const typeEl = document.getElementById('newHolType');
+    const dateVal = dateEl.value.trim();
+    const nameVal = nameEl.value.trim();
+    const typeVal = typeEl.value;
+
+    if(!dateVal){ dateEl.style.borderColor='#dc3545'; setTimeout(()=>dateEl.style.borderColor='',1500); showToast('⚠️ Please pick a date.'); return; }
+    if(!nameVal){ nameEl.style.borderColor='#dc3545'; setTimeout(()=>nameEl.style.borderColor='',1500); nameEl.focus(); showToast('⚠️ Please enter a holiday name.'); return; }
+    if(holidays.some(h=>h.date===dateVal)){
+        showToast('⚠️ A holiday already exists for this date.'); return;
+    }
+
+    const payload = { date: dateVal, name: nameVal, type: typeVal };
+    try{
+        setSyncStatus('loading','Saving holiday…');
+        const saved = await dbAddHoliday(payload);
+        if(saved && saved.id){
+            holidays.push(saved);
+            holidays.sort((a,b)=>a.date.localeCompare(b.date));
+        } else {
+            holidays.push({...payload, id: Date.now()});
+        }
+        renderHolidayList();
+        nameEl.value = ''; dateEl.value = '';
+        showToast('🗓️ Holiday added & synced to all users!');
+        setSyncStatus('ok','✅ Holiday saved.');
+    } catch(e){
+        setSyncStatus('error','❌ Could not save holiday: '+e.message);
+    }
+}
+
+async function removeHoliday(id){
+    openConfirm('Remove Holiday','Remove this holiday from the calendar? It will sync to all users.', async ()=>{
+        try{
+            setSyncStatus('loading','Removing holiday…');
+            await dbDeleteHoliday(id);
+            holidays = holidays.filter(h=>h.id!==id);
+            renderHolidayList();
+            showToast('🗑️ Holiday removed & synced.');
+            setSyncStatus('ok','✅ Holiday removed.');
+        } catch(e){
+            setSyncStatus('error','❌ Could not remove holiday: '+e.message);
+        }
+    });
+}
+
+function setHolFilter(f){
+    _holFilter = f;
+    ['all','public','company'].forEach(t=>{
+        const el = document.getElementById('holTab'+t.charAt(0).toUpperCase()+t.slice(1));
+        if(el) el.className = 'holiday-type-tab' + (t===f ? ' active-'+t : '');
+    });
+    renderHolidayList();
+}
+
+function renderHolidayList(){
+    const list = document.getElementById('holidayList');
+    const sumEl = document.getElementById('holSummary');
+    if(!list) return;
+
+    const pub  = holidays.filter(h=>h.type==='public').length;
+    const comp = holidays.filter(h=>h.type==='company').length;
+    const badge = document.getElementById('holidayCountBadge');
+    if(badge) badge.textContent = holidays.length + ' holiday'+(holidays.length!==1?'s':'');
+
+    if(sumEl){
+        sumEl.innerHTML = `
+            <div class="hol-stat public"><div class="hv">${pub}</div><div class="hl">Public</div></div>
+            <div class="hol-stat company"><div class="hv">${comp}</div><div class="hl">Company</div></div>
+            <div class="hol-stat"><div class="hv" style="color:#1a4d8c">${holidays.length}</div><div class="hl">Total</div></div>`;
+    }
+
+    const filtered = _holFilter==='all' ? [...holidays] : holidays.filter(h=>h.type===_holFilter);
+    if(!filtered.length){
+        list.innerHTML = '<div class="holiday-empty">No holidays in this category.</div>';
+        return;
+    }
+
+    list.innerHTML = filtered.map(h=>{
+        const dayName = getDayName(h.date);
+        const typeLabel = h.type==='public' ? '🟠 Public' : '🟢 Company';
+        // Check if anyone worked on this holiday
+        const workedCount = dbRows.filter(r=>r.date===h.date && r.login && r.login !== '' && r.resolution !== 'Holiday').length;
+        const workedBadge = workedCount > 0 ? `<span class="hd-worked">${workedCount} worked</span>` : '';
+        return `<div class="holiday-item ${h.type}">
+            <span class="hd-date">${formatDate(h.date)}</span>
+            <span class="hd-day">${dayName}</span>
+            <span class="hd-name">${esc(h.name)}</span>
+            ${workedBadge}
+            <span class="hd-type ${h.type}">${typeLabel}</span>
+            <button class="hd-remove" onclick="removeHoliday(${JSON.stringify(h.id)})" title="Remove">✕</button>
+        </div>`;
+    }).join('');
+}
+
 
 // ══════════════════════════════════════════════════════════════
 //  SUPABASE REST API WRAPPER  (direct — no middleman, very fast)
@@ -1151,8 +1391,8 @@ async function sbFetch(path, opts={}, _retry=true){
         'Prefer':        method === 'GET' ? 'count=none' : (opts.prefer || 'return=minimal')
     };
     if(opts.prefer) headers['Prefer'] = opts.prefer;
-    // Remove the 1000-row default cap: request all rows for GET requests
-    if(method === 'GET') headers['Range-Unit'] = 'items', headers['Range'] = '0-9999999';
+    // Remove Supabase 1000-row default cap for GET requests
+    if(method === 'GET'){ headers['Range-Unit'] = 'items'; headers['Range'] = '0-9999999'; }
 
     const controller = new AbortController();
     const timer = setTimeout(()=>controller.abort(), 15000);
@@ -1182,12 +1422,12 @@ async function sbFetch(path, opts={}, _retry=true){
 
 // ── violation_history ──
 async function dbLoad(){
-    // Paginate in batches of 1000 to fetch ALL rows (bypasses Supabase 1000-row cap)
+    // Paginate in batches to bypass Supabase 1000-row cap
     const PAGE = 1000;
     let all = [], offset = 0;
     while(true){
         const batch = await sbFetch(TABLE+'?order=date.asc&select=*&offset='+offset+'&limit='+PAGE);
-        if(!Array.isArray(batch) || batch.length === 0) break;
+        if(!Array.isArray(batch)||batch.length===0) break;
         all = all.concat(batch);
         if(batch.length < PAGE) break;
         offset += PAGE;
@@ -1258,12 +1498,11 @@ async function dbDeleteAttendance(id){
 }
 
 async function dbLoadAttendanceDates(){
-    // Paginate to get all distinct dates beyond 1000-row cap
     const PAGE = 1000;
     let all = [], offset = 0;
     while(true){
         const batch = await sbFetch(ATTEND_TABLE+'?select=date&order=date.desc&offset='+offset+'&limit='+PAGE);
-        if(!Array.isArray(batch) || batch.length === 0) break;
+        if(!Array.isArray(batch)||batch.length===0) break;
         all = all.concat(batch);
         if(batch.length < PAGE) break;
         offset += PAGE;
@@ -1412,6 +1651,7 @@ async function loadFromCloud(){
         renderHistory(getHistFilters());
         renderDateManager();
         refreshAttendDateSelect();
+        renderHolidayList(); // refresh 'X worked' badges
         // Hide retry button on success
         const rb = document.getElementById('syncRetryBtn');
         if(rb) rb.style.display='none';
@@ -1464,8 +1704,14 @@ async function saveViolationsForDate(dateStr, report){
             const isOnLeave   = r.status === 'On Leave';
             const isMaternity = r.status === 'Maternity';
             const isMenstrual = r.status === 'Menstrual';
+            const isHoliday   = r.isHoliday || r.status === 'Public Holiday' || r.status === 'Company Holiday';
+            const workedOnHol = r.workedOnHoliday;
             let resolution, reason, resolved_at;
-            if(isWeekOff){
+            if(isHoliday){
+                resolution='Holiday'; reason='[Auto] '+r.status+(r.holidayName?' — '+r.holidayName:''); resolved_at=new Date().toLocaleString();
+            } else if(workedOnHol){
+                resolution='present'; reason='[Worked on Holiday] '+(r.holidayName||''); resolved_at=new Date().toLocaleString();
+            } else if(isWeekOff){
                 resolution='Week Off'; reason='[Auto] Weekend week off'; resolved_at=new Date().toLocaleString();
             } else if(isOnLeave){
                 resolution='On Leave'; reason='On Leave'; resolved_at=new Date().toLocaleString();
@@ -1592,7 +1838,8 @@ async function saveResolutionToCloud(date, name, resolution, reason){
                       resolution === 'On Leave'   ? 'Marked as On Leave'        :
                       resolution === 'Week Off'   ? 'Marked as Week Off'        :
                       resolution === 'Maternity'  ? 'Marked as Maternity Leave' :
-                      resolution === 'Menstrual'  ? 'Marked as Menstrual Leave' : 'Marked as Ignored';
+                      resolution === 'Menstrual'  ? 'Marked as Menstrual Leave' :
+                      resolution === 'Holiday'    ? 'Marked as Holiday'         : 'Marked as Ignored';
         setSyncStatus('ok', '✅ ' + label + ' for ' + name + ' — saved & synced.');
 
         // STEP 6: NO background reload — cache is already correct.
@@ -1758,6 +2005,7 @@ function updateResOptions(){
     document.getElementById('resOptWeekOff').className='res-option'+(selectedResolution==='Week Off'?' selected-weekoff':'');
     document.getElementById('resOptMaternity').className='res-option'+(selectedResolution==='Maternity'?' selected-on-leave':'');
     document.getElementById('resOptMenstrual').className='res-option'+(selectedResolution==='Menstrual'?' selected-on-leave':'');
+    document.getElementById('resOptHoliday').className='res-option'+(selectedResolution==='Holiday'?' selected-on-leave':'');
     // Show Full/Half Day sub-choice only when Ignored is selected
     const subChoice = document.getElementById('ignoredSubChoice');
     if(subChoice) subChoice.style.display = selectedResolution==='Ignored' ? 'block' : 'none';
@@ -1798,6 +2046,7 @@ async function saveEdit(){
                   savedResolution==='Week Off'   ? 'marked as Week Off'    :
                   savedResolution==='Maternity'  ? 'marked as Maternity Leave' :
                   savedResolution==='Menstrual'  ? 'marked as Menstrual Leave' :
+                  savedResolution==='Holiday'    ? 'marked as Holiday'     :
                   'marked as Ignored ('+(_ignoredType==='half'?'Half Day':'Full Day')+')';
     showToast('✅ ' + savedName + ' — ' + label + ' (synced to cloud)');
 }
@@ -1832,7 +2081,7 @@ async function quickResolve(date, name, resolution, reason){
     await saveResolutionToCloud(date, name, resolution, reason);
     const labels = {
         'On Leave':'📅 On Leave','Maternity':'🤱 Maternity Leave',
-        'Menstrual':'🌸 Menstrual Leave','Week Off':'🏖️ Week Off','Ignored':'🔕 Ignored'
+        'Menstrual':'🌸 Menstrual Leave','Week Off':'🏖️ Week Off','Holiday':'🗓️ Holiday','Ignored':'🔕 Ignored'
     };
     showToast(`✅ ${name} → ${labels[resolution]||resolution}`);
 }
@@ -1927,6 +2176,7 @@ function renderHistory(filters={}){
     else if(type==='On Leave')  violations=violations.filter(v=>v.resolution==='On Leave');
     else if(type==='Week Off')  violations=violations.filter(v=>v.resolution==='Week Off');
     else if(type==='Ignored')   violations=violations.filter(v=>v.resolution==='Ignored');
+    else if(type==='Holiday')   violations=violations.filter(v=>v.resolution==='Holiday');
     else if(type==='Missing')   violations=violations.filter(v=>v.status==='Missing');
     if(from) violations=violations.filter(v=>v.date>=from);
     if(to)   violations=violations.filter(v=>v.date<=to);
@@ -1938,6 +2188,7 @@ function renderHistory(filters={}){
     const menstrual=violations.filter(v=>v.resolution==='Menstrual').length;
     const weekOff  =violations.filter(v=>v.resolution==='Week Off').length;
     const ignored  =violations.filter(v=>v.resolution==='Ignored').length;
+    const holiday  =violations.filter(v=>v.resolution==='Holiday').length;
     const uniqueEmp=new Set(violations.map(v=>v.name)).size;
     const uniqueDays=new Set(violations.map(v=>v.date)).size;
 
@@ -1950,6 +2201,7 @@ function renderHistory(filters={}){
         <div class="hist-stat"><div class="hv" style="color:#880e4f">${menstrual}</div><div class="hl">Menstrual</div></div>
         <div class="hist-stat"><div class="hv" style="color:#8e44ad">${weekOff}</div><div class="hl">Week Off</div></div>
         <div class="hist-stat"><div class="hv" style="color:#6f42c1">${ignored}</div><div class="hl">Ignored</div></div>
+        <div class="hist-stat"><div class="hv" style="color:#e65100">${holiday}</div><div class="hl">Holiday</div></div>
         <div class="hist-stat"><div class="hv" style="color:#e67e22">${uniqueEmp}</div><div class="hl">Employees</div></div>
         <div class="hist-stat"><div class="hv" style="color:#1a4d8c">${uniqueDays}</div><div class="hl">Days</div></div>`;
 
@@ -1986,6 +2238,7 @@ function renderHistory(filters={}){
             else if(res==='Maternity')  resBadge=`<span class="res-badge res-maternity">🤱 Maternity</span>`;
             else if(res==='Menstrual')  resBadge=`<span class="res-badge res-menstrual">🌸 Menstrual</span>`;
             else if(res==='Week Off')   resBadge=`<span class="res-badge res-weekoff">🏖️ Week Off</span>`;
+            else if(res==='Holiday')    resBadge=`<span class="res-badge res-holiday">🗓️ Holiday</span>`;
             else if(res==='Ignored')    resBadge=`<span class="res-badge res-ignored">🔕 Ignored</span>`;
 
             const reasonHtml=v.reason?`<div class="res-reason">💬 ${esc(v.reason)}</div>`:'';
@@ -2055,6 +2308,8 @@ function isWeekend(dateStr){
 function isAutoWeekOff(name,team,dateStr){
     return team==='annotation' && isWeekend(dateStr);
 }
+// Returns holiday object if date is a holiday, else null
+function getHolidayForDate(dateStr){ return holidays.find(h=>h.date===dateStr)||null; }
 
 function getHistFilters(){
     return{
@@ -2293,6 +2548,7 @@ function getAttendanceStatus(login, logout, hasLogin, hasLogout){
 function buildReport(msgs, dateStr){
     // dateStr passed explicitly — no DOM access inside map
     const reportDate = dateStr || document.getElementById('reportDate')?.value || new Date().toISOString().split('T')[0];
+    const holiday = getHolidayForDate(reportDate); // check holiday calendar
     const state={};
     allEmployees().forEach(n=>{state[n]={logins:[],logouts:[],onLeave:false};});
     msgs.forEach(m=>{
@@ -2306,6 +2562,20 @@ function buildReport(msgs, dateStr){
         if(s.onLeave)return{name,team,login:'',logout:'',workingHours:'-',status:'On Leave',statusClass:'status-leave',icon:'📅',isViolation:false,shortHours:false};
         const login=s.logins.sort((a,b)=>(timeToMinutes(a)||0)-(timeToMinutes(b)||0))[0]||null;
         const logout=s.logouts.sort((a,b)=>(timeToMinutes(b)||0)-(timeToMinutes(a)||0))[0]||null;
+        // ── HOLIDAY: if date is a holiday and employee has NO Slack data → mark as Holiday ──
+        if(holiday && !login && !logout){
+            const hlabel = holiday.type==='public' ? 'Public Holiday' : 'Company Holiday';
+            return{name,team,login:'',logout:'',workingHours:'-',status:hlabel,statusClass:'status-leave',icon:'🗓️',isViolation:false,shortHours:false,isHoliday:true,holidayName:holiday.name};
+        }
+        // ── If employee worked ON a holiday — store their data normally (no violation) ──
+        if(holiday && (login || logout)){
+            let hours='-';
+            if(login&&logout){const d=timeToMinutes(logout)-timeToMinutes(login);hours=((d<0?d+1440:d)/60).toFixed(2)+' hrs';}
+            const result = getAttendanceStatus(login, logout, !!login, !!logout);
+            return{name,team,login:login||'❌ No login',logout:logout||'❌ No logout',workingHours:hours,
+                   status:result.status,statusClass:result.statusClass,icon:'🗓️✅',
+                   isViolation:false,shortHours:result.shortHours,workedOnHoliday:true,holidayName:holiday.name};
+        }
         // Auto Week Off: Annotation team on weekends with NO Slack data
         if(isAutoWeekOff(name, team, reportDate) && !login && !logout){
             return{name,team,login:'',logout:'',workingHours:'-',status:'Week Off',statusClass:'status-leave',icon:'🏖️',isViolation:false,shortHours:false,autoWeekOff:true};
@@ -2704,6 +2974,7 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
                 else if(row.resolution==='Maternity')  attendStatus = 'Maternity';
                 else if(row.resolution==='Menstrual')  attendStatus = 'Menstrual';
                 else if(row.resolution==='Week Off')   attendStatus = 'Week Off';
+                else if(row.resolution==='Holiday')    attendStatus = row.status||'Holiday';
                 else if(row.resolution==='present') attendStatus = row.status==='On Leave'?'On Leave':
                     (()=>{
                         const a=timeToMinutes(row.login),b=timeToMinutes(row.logout);
@@ -2857,6 +3128,17 @@ function renderAttendance(dateStr){
     if(weekendNotice){
         weekendNotice.style.display = isWeekend(dateStr) ? 'block' : 'none';
     }
+    const holidayForDate = getHolidayForDate(dateStr);
+    const holidayNotice = document.getElementById('attendHolidayNotice');
+    if(holidayNotice){
+        if(holidayForDate){
+            const typeLabel = holidayForDate.type==='public' ? 'Public Holiday' : 'Company Holiday';
+            document.getElementById('attendHolidayLabel').textContent = '🗓️ '+typeLabel+' — '+holidayForDate.name+':';
+            holidayNotice.style.display = 'block';
+        } else {
+            holidayNotice.style.display = 'none';
+        }
+    }
     // Build On Leave tooltip breakdown
     const leaveBreakdown = [
         onLeave   ? onLeave+' On Leave'     : '',
@@ -2893,6 +3175,7 @@ function renderAttendance(dateStr){
     merged.sort((a,b) => sortPriority(a) - sortPriority(b));
 
     const rows = merged.map(r=>{
+        const isHolStatus = r.status==='Public Holiday'||r.status==='Company Holiday'||r.resolution==='Holiday';
         const rowClass = r.status==='Full Day'      ?'attend-fullday':
                          r.status==='Present'       ?'attend-present':
                          r.status==='Half Day'      ?'attend-halfday':
@@ -2900,7 +3183,8 @@ function renderAttendance(dateStr){
                          r.status==='Maternity'     ?'attend-maternity':
                          r.status==='Menstrual'     ?'attend-menstrual':
                          r.status==='On Leave'      ?'attend-leave':
-                         r.status==='Not Recorded'  ?'attend-leave':'';
+                         r.status==='Not Recorded'  ?'attend-leave':
+                         isHolStatus                ?'attend-weekoff':'';
         const badgeCls = r.status==='Full Day'      ?'ab-fullday':
                          r.status==='Present'       ?'ab-present':
                          r.status==='Half Day'      ?'ab-halfday':
@@ -2908,13 +3192,14 @@ function renderAttendance(dateStr){
                          r.status==='Maternity'     ?'ab-maternity':
                          r.status==='Menstrual'     ?'ab-menstrual':
                          r.status==='On Leave'      ?'ab-leave':
-                         r.status==='Not Recorded'  ?'ab-leave':'ab-leave';
+                         r.status==='Not Recorded'  ?'ab-leave':
+                         isHolStatus                ?'ab-weekoff':'ab-leave';
         const manualBadge = r.source === 'manual' ? '<span class="attend-badge ab-manual">✏️ Manual</span>' : '';
         const teamBadge   = `<span class="team-badge ${r.team}">${r.team==='annotation'?'Annotation':'Assessment'}</span>`;
         const hours       = calcWorkingHours(r.login, r.logout);
         const short       = r.status==='Full Day' && isShortHours(r.login, r.logout);
-        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Maternity'||r.status==='Menstrual'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
-        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Maternity'||r.status==='Menstrual'||r.status==='Week Off'||r.status==='Unknown')?'—':'❌ Missing';
+        const loginTxt    = r.login  && r.login!=='❌ No login'  ? r.login  : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Maternity'||r.status==='Menstrual'||r.status==='Week Off'||r.status==='Unknown'||isHolStatus)?'—':'❌ Missing';
+        const logoutTxt   = r.logout && r.logout!=='❌ No logout' ? r.logout : (r.status==='Not Recorded'||r.status==='On Leave'||r.status==='Maternity'||r.status==='Menstrual'||r.status==='Week Off'||r.status==='Unknown'||isHolStatus)?'—':'❌ Missing';
         // Store row data in a global map keyed by safe index — avoids ALL quote issues in onclick
         const rowKey = 'ar_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         window._attendRowMap = window._attendRowMap || {};
@@ -3645,6 +3930,7 @@ function renderEmpHistory(){
                 : res==='Maternity' ? `<span class="res-badge res-maternity">🤱 Maternity</span>`
                 : res==='Menstrual' ? `<span class="res-badge res-menstrual">🌸 Menstrual</span>`
                 : res==='Week Off'  ? `<span class="res-badge res-weekoff">🏖️ Week Off</span>`
+                : res==='Holiday'   ? `<span class="res-badge res-holiday">🗓️ Holiday</span>`
                 : res==='Ignored'   ? `<span class="res-badge res-ignored">🔕 Ignored</span>`
                 : `<span class="res-badge" style="background:#d4edda;color:#155724;">✅ Present</span>`;
             return `<tr>
@@ -3836,8 +4122,15 @@ async function initApp(){
     // Load teams from cloud first so employee list is same for all users
     setSyncStatus('loading','⏳ Loading settings…');
     await loadTeams();
+    await loadHolidays();
     renderEmpGrid();
     await loadFromCloud();
+
+    document.getElementById('holidayPanelToggle').addEventListener('click',()=>{
+        document.getElementById('holidayPanelToggle').classList.toggle('open');
+        document.getElementById('holidayPanelBody').classList.toggle('open');
+    });
+    document.getElementById('newHolName').addEventListener('keydown',e=>{if(e.key==='Enter')addHoliday();});
 
     document.getElementById('empPanelToggle').addEventListener('click',()=>{
         document.getElementById('empPanelToggle').classList.toggle('open');
