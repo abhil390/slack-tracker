@@ -201,8 +201,8 @@
 
         /* attendance panel */
         .attend-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
-        .attend-toolbar select{padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;min-width:200px;}
-        .attend-toolbar select:focus{outline:none;border-color:#1a4d8c;}
+        .attend-toolbar select,.attend-toolbar input[type=date]{padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;min-width:160px;}
+        .attend-toolbar select:focus,.attend-toolbar input[type=date]:focus{outline:none;border-color:#1a4d8c;}
         /* searchable employee filter */
         .emp-search-wrap{position:relative;min-width:220px;}
         .emp-search-wrap input{width:100%;padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;box-sizing:border-box;}
@@ -352,6 +352,8 @@
         body.dark .sync-bar.error{background:#2d1b1b;border-color:#c0392b;}
         body.dark .sync-bar.loading{background:#1b2535;border-color:#2980b9;}
         body.dark .attend-toolbar select{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark .attend-toolbar input[type=date]{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
+        body.dark #histDateFilter{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
         body.dark .emp-search-wrap input{background:#252839;border-color:#3a3d4e;color:#e0e6f0;}
         body.dark .emp-search-dropdown{background:#252839;border-color:#4a90d9;}
         body.dark .emp-search-opt{border-color:#2a2d3e;color:#c0c8dc;}
@@ -730,8 +732,6 @@
         <div class="panel-body" id="holidayPanelBody">
             <div class="holiday-notice">
                 📌 Set <strong>Public Holidays</strong> (government) and <strong>Company Holidays</strong> (office-declared). On these dates employees are auto-marked as <strong>Holiday</strong> — no violation. If someone worked anyway, their Slack data is stored normally and overrides the holiday status.
-                <br><br>⚠️ <strong>First time setup:</strong> Run this in your <a href="https://supabase.com/dashboard" target="_blank" style="color:#e65100;">Supabase SQL Editor</a>:<br>
-                <code style="font-size:11px;background:#f0f0f0;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;">create table if not exists holidays (id uuid primary key default gen_random_uuid(), date text not null unique, name text not null, type text not null); alter table holidays enable row level security; create policy "All" on holidays for all using (true) with check (true);</code>
             </div>
             <!-- Add new holiday row -->
             <div class="holiday-toolbar">
@@ -790,9 +790,7 @@
                 <div class="history-summary" id="histSummary"></div>
                 <div class="history-toolbar" style="flex-wrap:wrap;gap:8px;">
                     <label>📅 Date:</label>
-                    <select id="histDateFilter" onchange="onHistDateFilterChange()" style="min-width:200px;padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;">
-                        <option value="">— All Dates —</option>
-                    </select>
+                    <input type="date" id="histDateFilter" onchange="onHistDateFilterChange()" style="padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;cursor:pointer;"/>
                     <label>Team:</label>
                     <select id="histTeamFilter">
                         <option value="all">All Teams</option>
@@ -886,9 +884,7 @@
         <div class="panel-body" id="attendPanelBody">
             <div class="attend-toolbar">
                 <label style="font-size:13px;font-weight:600;color:#555;">Select Date:</label>
-                <select id="attendDateSelect" onchange="loadAttendance()">
-                    <option value="">— Pick a date —</option>
-                </select>
+                <input type="date" id="attendDateSelect" onchange="loadAttendance()" style="padding:8px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:13px;background:white;cursor:pointer;"/>
                 <label style="font-size:13px;font-weight:600;color:#555;">Employee:</label>
                 <div class="emp-search-wrap" id="empSearchWrap">
                     <input type="text" id="empSearchInput" placeholder="Search or select employee…" autocomplete="off" oninput="onEmpSearchInput()" onfocus="openEmpDropdown()" onkeydown="onEmpSearchKey(event)"/>
@@ -1918,27 +1914,17 @@ function renderDateManager(){
         onDateSelectChange();
     }
 
-    // Also populate the violations tab date filter
+    // histDateFilter is now input[type=date] — just set the value directly
     const histSel = document.getElementById('histDateFilter');
     if(histSel){
-        const prevHist = histSel.value;
         const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
-        histSel.innerHTML = '<option value="">— All Dates —</option>';
-        dates.forEach(date=>{
-            const rows   = dbRows.filter(r=>r.date===date);
-            const active = rows.filter(isActive).length;
-            const opt    = document.createElement('option');
-            opt.value    = date;
-            opt.textContent = formatDate(date) + ' (' + active + ' active)';
-            histSel.appendChild(opt);
-        });
-        // Auto-select the lastProcessedDate
+        const prevHist = histSel.value;
         if(lastProcessedDate && dates.includes(lastProcessedDate)){
             histSel.value = lastProcessedDate;
         } else if(prevHist && dates.includes(prevHist)){
             histSel.value = prevHist;
         } else if(dates.length){
-            histSel.value = dates[0]; // most recent
+            histSel.value = dates[0];
         }
     }
 }
@@ -1958,12 +1944,6 @@ function onHistDateFilterChange(){
     if(dateStr){
         const attSel = document.getElementById('attendDateSelect');
         if(attSel && attSel.value !== dateStr){
-            // Add option if not present
-            if(![...attSel.options].some(o=>o.value===dateStr)){
-                const opt=document.createElement('option');
-                opt.value=dateStr; opt.textContent=getDayName(dateStr)+' — '+formatDate(dateStr);
-                attSel.insertBefore(opt,attSel.children[1]||null);
-            }
             attSel.value = dateStr;
             attendCurrentDate = dateStr;
             dbLoadAttendance(dateStr).then(rows=>{
@@ -2806,23 +2786,13 @@ let attendEditId = null;    // id of row being edited (null = new)
 
 // Populate attendance date dropdown — merge violation dates + attendance dates
 function refreshAttendDateSelect(){
-    // Dates come from dbRows (already in memory — no extra DB call needed)
+    // attendDateSelect is now input[type=date] — just preserve current value
     const sel = document.getElementById('attendDateSelect');
-    const prev = sel.value;
-    const allDates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
-    sel.innerHTML = '<option value="">— Pick a date —</option>';
-    allDates.forEach(d=>{
-        const opt = document.createElement('option');
-        opt.value = d; opt.textContent = getDayName(d) + ' — ' + formatDate(d);
-        sel.appendChild(opt);
-    });
-    if(prev && allDates.includes(prev)) sel.value = prev;
-    // Also add current report date if not in list
-    const curDate = document.getElementById('reportDate')?.value;
-    if(curDate && !allDates.includes(curDate)){
-        const opt = document.createElement('option');
-        opt.value = curDate; opt.textContent = getDayName(curDate) + ' — ' + formatDate(curDate);
-        sel.insertBefore(opt, sel.children[1]);
+    if(!sel) return;
+    // If no date selected yet, default to most recent date in DB or today
+    if(!sel.value){
+        const allDates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
+        if(allDates.length) sel.value = allDates[0];
     }
 }
 
@@ -2841,7 +2811,7 @@ async function loadAttendance(){
     document.getElementById('attendContent').innerHTML = '<div class="no-attend">Loading…</div>';
     // ── Sync date to Violations tab and Daily Input date ──
     const histSel = document.getElementById('histDateFilter');
-    if(histSel && histSel.value !== dateStr && [...histSel.options].some(o=>o.value===dateStr)){
+    if(histSel && histSel.value !== dateStr){
         histSel.value = dateStr;
         lastProcessedDate = dateStr;
         updateTodayViolTabLabel&&updateTodayViolTabLabel();
@@ -3590,14 +3560,11 @@ async function onMddConfirm(){
         attendCurrentDate = '';
         _masterDeleteDate = '';
 
-        // Remove from both dropdowns instantly
-        ['attendDateSelect','dateSelect'].forEach(id=>{
-            const sel = document.getElementById(id);
-            if(!sel) return;
-            const opt = sel.querySelector(`option[value="${dateStr}"]`);
-            if(opt) opt.remove();
-            sel.value = '';
-        });
+        // Clear date inputs/selects after deletion
+        const attDateEl = document.getElementById('attendDateSelect');
+        if(attDateEl) attDateEl.value = '';
+        const dateSelEl = document.getElementById('dateSelect');
+        if(dateSelEl){ const opt=dateSelEl.querySelector(`option[value="${dateStr}"]`); if(opt) opt.remove(); dateSelEl.value=''; }
 
         document.getElementById('attendBadge').textContent  = 'Select a date';
         document.getElementById('attendSummary').innerHTML  = '';
@@ -4204,10 +4171,14 @@ async function initApp(){
     document.getElementById('histResetFilterBtn').addEventListener('click',()=>{
         ['histTeamFilter','histTypeFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all';});
         ['histFromDate','histToDate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-        // Reset to latest date
+        // Reset to latest date in DB
         const histSel = document.getElementById('histDateFilter');
-        if(histSel && histSel.options.length > 1) histSel.value = histSel.options[1].value;
-        if(histSel) { lastProcessedDate = histSel.value; updateTodayViolTabLabel(); }
+        if(histSel){
+            const dates = [...new Set(dbRows.map(r=>r.date))].sort().reverse();
+            if(dates.length) histSel.value = dates[0];
+            lastProcessedDate = histSel.value;
+            updateTodayViolTabLabel();
+        }
         renderHistory();
     });
     document.getElementById('histExportBtn').addEventListener('click',()=>exportHistoryCSV(getHistFilters()));
@@ -4238,7 +4209,7 @@ async function initApp(){
             attendRows = [];
             document.getElementById('attendContent').innerHTML='<div class="no-attend">Select a date above to view attendance.</div>';
             document.getElementById('attendSummary').innerHTML='';
-            document.getElementById('attendDateSelect').innerHTML='<option value="">— Pick a date —</option>';
+            document.getElementById('attendDateSelect').value='';
             showToast('🗑️ All history cleared.');
         }
         catch(e){ setSyncStatus('error','Delete failed: '+e.message); }
