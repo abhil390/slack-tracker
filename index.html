@@ -1255,7 +1255,8 @@ async function dbAddHoliday(h){
     return Array.isArray(r) ? r[0] : r;
 }
 async function dbDeleteHoliday(id){
-    await sbFetch(HOLIDAY_TABLE+'?id=eq.'+id, {method:'DELETE', prefer:'return=minimal'});
+    // Use encodeURIComponent to safely encode UUID in URL
+    await sbFetch(HOLIDAY_TABLE+'?id=eq.'+encodeURIComponent(String(id)), {method:'DELETE', prefer:'return=minimal'});
 }
 
 // Load holidays from cloud into memory
@@ -1313,19 +1314,32 @@ async function addHoliday(){
     }
 }
 
+function removeHolidayByBtn(btn){
+    const hid = btn.getAttribute('data-hid');
+    removeHoliday(hid);
+}
+
 async function removeHoliday(id){
-    openConfirm('Remove Holiday','Remove this holiday from the calendar? It will sync to all users.', async ()=>{
-        try{
-            setSyncStatus('loading','Removing holiday…');
-            await dbDeleteHoliday(id);
-            holidays = holidays.filter(h=>h.id!==id);
-            renderHolidayList();
-            showToast('🗑️ Holiday removed & synced.');
-            setSyncStatus('ok','✅ Holiday removed.');
-        } catch(e){
-            setSyncStatus('error','❌ Could not remove holiday: '+e.message);
+    // id is always a string (UUID) — find by string comparison
+    const idStr = String(id);
+    const holiday = holidays.find(h=>String(h.id)===idStr);
+    if(!holiday){ showToast('⚠️ Holiday not found in local cache. Try refreshing.'); return; }
+
+    openConfirm('Remove Holiday',
+        'Remove <strong>'+esc(holiday.name)+'</strong> ('+formatDate(holiday.date)+') from the calendar? This will sync to all users.',
+        async ()=>{
+            try{
+                setSyncStatus('loading','Removing holiday…');
+                await dbDeleteHoliday(idStr);
+                holidays = holidays.filter(h=>String(h.id)!==idStr);
+                renderHolidayList();
+                showToast('🗑️ Holiday removed & synced.');
+                setSyncStatus('ok','✅ Holiday removed.');
+            } catch(e){
+                setSyncStatus('error','❌ Could not remove holiday: '+e.message);
+            }
         }
-    });
+    );
 }
 
 function setHolFilter(f){
@@ -1372,7 +1386,7 @@ function renderHolidayList(){
             <span class="hd-name">${esc(h.name)}</span>
             ${workedBadge}
             <span class="hd-type ${h.type}">${typeLabel}</span>
-            <button class="hd-remove" onclick="removeHoliday(${JSON.stringify(h.id)})" title="Remove">✕</button>
+            <button class="hd-remove" data-hid="${esc(String(h.id))}" onclick="removeHolidayByBtn(this)" title="Remove">✕</button>
         </div>`;
     }).join('');
 }
