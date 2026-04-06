@@ -550,6 +550,32 @@
         .login-user-badge:hover{background:#d2e3fc;}
         .top-user-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-bottom:12px;}
 
+
+        /* ══ ATTENDANCE STATUS FILTER BAR ══ */
+        .attend-filter-bar{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:none;}
+        .attend-filter-bar.visible{display:block;}
+        .attend-filter-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:10px;}
+        .attend-filter-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+        .afc{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:all .18s;background:#fff;color:#555;border-color:#e0e0e0;user-select:none;}
+        .afc:hover{border-color:#1a4d8c;color:#1a4d8c;}
+        .afc.afc-on{border-color:currentColor;}
+        .afc.afc-fullday{color:#27ae60;} .afc.afc-fullday.afc-on{background:#d4edda;}
+        .afc.afc-halfday{color:#e67e22;} .afc.afc-halfday.afc-on{background:#fff3cd;}
+        .afc.afc-notrecorded{color:#dc3545;} .afc.afc-notrecorded.afc-on{background:#f8d7da;}
+        .afc.afc-onleave{color:#1a4d8c;} .afc.afc-onleave.afc-on{background:#e8f0fe;}
+        .afc.afc-maternity{color:#ad1457;} .afc.afc-maternity.afc-on{background:#fce4ec;}
+        .afc.afc-menstrual{color:#880e4f;} .afc.afc-menstrual.afc-on{background:#fce4ec;}
+        .afc.afc-weekoff{color:#5a32a3;} .afc.afc-weekoff.afc-on{background:#e8d5ff;}
+        .afc.afc-holiday{color:#e65100;} .afc.afc-holiday.afc-on{background:#fff3e0;}
+        .afc.afc-unknown{color:#888;} .afc.afc-unknown.afc-on{background:#e9ecef;}
+        .attend-filter-presets{display:flex;flex-wrap:wrap;gap:6px;padding-top:10px;border-top:1px solid #eee;}
+        .afp{padding:4px 12px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:#e9ecef;color:#555;transition:background .15s;}
+        .afp:hover{background:#dee2e6;}
+        .attend-filter-count{font-size:12px;color:#888;margin-top:8px;padding-top:8px;border-top:1px solid #eee;}
+        body.dark .attend-filter-bar{background:#1e2030;border-color:#3a3d4e;}
+        body.dark .afc{background:#252839;color:#aaa;border-color:#3a3d4e;}
+        body.dark .afp{background:#2a2d3e;color:#bbb;}
+
         /* ══ HOLIDAY CALENDAR ══ */
         .holiday-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;}
         .holiday-toolbar label{font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:4px;}
@@ -902,6 +928,30 @@
                 <input type="date" id="empRangeTo" onchange="applyEmpDateRange()"/>
                 <button class="btn btn-secondary btn-sm" onclick="clearEmpDateRange()">✖ Clear Range</button>
                 <span id="empRangeLabel" style="font-size:12px;color:#888;"></span>
+            </div>
+            <!-- ══ STATUS FILTER BAR — shown in employee history view ══ -->
+            <div class="attend-filter-bar" id="attendFilterBar">
+                <div class="attend-filter-label">Filter by Status</div>
+                <div class="attend-filter-chips" id="attendFilterChips">
+                    <span class="afc afc-fullday"     data-status="Full Day"        onclick="toggleAttendFilter(this)">✅ Full Day</span>
+                    <span class="afc afc-halfday"     data-status="Half Day"        onclick="toggleAttendFilter(this)">🌓 Half Day</span>
+                    <span class="afc afc-notrecorded" data-status="Not Recorded"    onclick="toggleAttendFilter(this)">❌ Not Recorded</span>
+                    <span class="afc afc-onleave"     data-status="On Leave"        onclick="toggleAttendFilter(this)">📅 On Leave</span>
+                    <span class="afc afc-maternity"   data-status="Maternity"       onclick="toggleAttendFilter(this)">🤱 Maternity</span>
+                    <span class="afc afc-menstrual"   data-status="Menstrual"       onclick="toggleAttendFilter(this)">🌸 Menstrual</span>
+                    <span class="afc afc-weekoff"     data-status="Week Off"        onclick="toggleAttendFilter(this)">🏖️ Week Off</span>
+                    <span class="afc afc-holiday"     data-status="Public Holiday"  onclick="toggleAttendFilter(this)">🗓️ Public Holiday</span>
+                    <span class="afc afc-holiday"     data-status="Company Holiday" onclick="toggleAttendFilter(this)">🗓️ Company Holiday</span>
+                    <span class="afc afc-unknown"     data-status="Unknown"         onclick="toggleAttendFilter(this)">❓ Unknown</span>
+                </div>
+                <div class="attend-filter-presets">
+                    <button class="afp" onclick="applyAttendPreset(['On Leave','Maternity','Menstrual'])">📅 All Leaves</button>
+                    <button class="afp" onclick="applyAttendPreset(['Week Off','Public Holiday','Company Holiday'])">🏖️ Non-working Days</button>
+                    <button class="afp" onclick="applyAttendPreset(['Not Recorded','Half Day'])">⚠️ Violations</button>
+                    <button class="afp" onclick="applyAttendPreset(['Full Day','Half Day'])">💼 Working Days</button>
+                    <button class="afp" style="background:#dc354522;color:#dc3545;" onclick="clearAttendFilter()">✖ Clear All</button>
+                </div>
+                <div class="attend-filter-count" id="attendFilterCount"></div>
             </div>
             <div id="attendWeekendNotice" style="display:none;background:#f5f0ff;border:1px solid #c9a8ff;border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:13px;color:#5a32a3;">
                 🏖️ <strong>Weekend:</strong> Data Annotation team is auto-marked as <strong>Week Off</strong>. If they worked, paste their Slack messages and process — it will override to their actual hours.
@@ -2877,10 +2927,12 @@ function selectEmpFilter(name){
     _empSearchHighlight = -1;
     document.getElementById('empSearchInput').value = name;
     closeEmpDropdown();
-    // Show/hide date range row
+    // Show/hide date range row and filter bar
     const rangeRow = document.getElementById('attendRangeRow');
     rangeRow.style.display = name ? 'flex' : 'none';
-    if(!name){ clearEmpDateRange(false); }
+    const filterBar = document.getElementById('attendFilterBar');
+    if(filterBar) filterBar.classList.toggle('visible', !!name);
+    if(!name){ clearEmpDateRange(false); clearAttendFilter(); }
     renderAttendanceFiltered();
 }
 
@@ -2956,6 +3008,105 @@ function isShortHoursExcused(name, dateStr){
     return row && (row.reason||'').includes('[Short Hours Excused]');
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  ATTENDANCE STATUS FILTER  — employee history view
+// ══════════════════════════════════════════════════════════════
+let _attendActiveFilters = new Set(); // set of status strings that are ON
+
+function toggleAttendFilter(chip){
+    const status = chip.dataset.status;
+    if(_attendActiveFilters.has(status)){
+        _attendActiveFilters.delete(status);
+        chip.classList.remove('afc-on');
+    } else {
+        _attendActiveFilters.add(status);
+        chip.classList.add('afc-on');
+    }
+    applyAttendFilterToTable();
+}
+
+function applyAttendPreset(statuses){
+    // Clear all first, then activate the preset ones
+    _attendActiveFilters = new Set(statuses);
+    document.querySelectorAll('.afc').forEach(c=>{
+        c.classList.toggle('afc-on', _attendActiveFilters.has(c.dataset.status));
+    });
+    applyAttendFilterToTable();
+}
+
+function clearAttendFilter(){
+    _attendActiveFilters.clear();
+    document.querySelectorAll('.afc').forEach(c=>c.classList.remove('afc-on'));
+    applyAttendFilterToTable();
+}
+
+function applyAttendFilterToTable(){
+    const table = document.querySelector('#attendContent .attend-table tbody');
+    if(!table){ return; }
+
+    const filterCount = document.getElementById('attendFilterCount');
+    const noFilter = _attendActiveFilters.size === 0;
+
+    // We need the full merged data — re-read from stored rows
+    // Strategy: show/hide existing TR rows by matching data-status attribute
+    let visible = 0, total = 0;
+    table.querySelectorAll('tr[data-status]').forEach(tr=>{
+        const rowStatus = tr.dataset.status;
+        const show = noFilter || _attendActiveFilters.has(rowStatus);
+        tr.style.display = show ? '' : 'none';
+        total++;
+        if(show) visible++;
+    });
+
+    if(filterCount){
+        filterCount.textContent = noFilter
+            ? ''
+            : `Showing ${visible} of ${total} records`;
+    }
+    // Update summary cards to reflect filtered rows
+    updateAttendSummaryFromFilter(table, noFilter);
+}
+
+function updateAttendSummaryFromFilter(tbody, noFilter){
+    // Collect visible rows' statuses and hours for summary recalculation
+    const visibleRows = [];
+    tbody.querySelectorAll('tr[data-status]').forEach(tr=>{
+        if(tr.style.display !== 'none'){
+            visibleRows.push({
+                status: tr.dataset.status,
+                login:  tr.dataset.login  || '',
+                logout: tr.dataset.logout || ''
+            });
+        }
+    });
+
+    const total      = visibleRows.length;
+    const fullDay    = visibleRows.filter(r=>r.status==='Full Day'||r.status==='Present').length;
+    const halfDay    = visibleRows.filter(r=>r.status==='Half Day').length;
+    const absent     = visibleRows.filter(r=>r.status==='Not Recorded').length;
+    const onLeave    = visibleRows.filter(r=>r.status==='On Leave').length;
+    const maternity  = visibleRows.filter(r=>r.status==='Maternity').length;
+    const menstrual  = visibleRows.filter(r=>r.status==='Menstrual').length;
+    const weekOff    = visibleRows.filter(r=>r.status==='Week Off').length;
+    const pubHol     = visibleRows.filter(r=>r.status==='Public Holiday').length;
+    const compHol    = visibleRows.filter(r=>r.status==='Company Holiday').length;
+    const allLeaves  = onLeave + maternity + menstrual;
+
+    const summaryEl = document.getElementById('attendSummary');
+    if(summaryEl){
+        summaryEl.innerHTML = `
+            <div class="attend-stat"><div class="av" style="color:#2c3e50">${total}</div><div class="al">Total Days</div></div>
+            <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay}</div><div class="al">✅ Full Day</div></div>
+            <div class="attend-stat"><div class="av" style="color:#e67e22">${halfDay}</div><div class="al">🌓 Half Day</div></div>
+            <div class="attend-stat"><div class="av" style="color:#aaa">${absent}</div><div class="al">📭 Not Recorded</div></div>
+            <div class="attend-stat"><div class="av" style="color:#dc3545">${allLeaves}</div><div class="al">📅 On Leave</div></div>
+            <div class="attend-stat"><div class="av" style="color:#5a32a3">${weekOff}</div><div class="al">🏖️ Week Off</div></div>
+            <div class="attend-stat"><div class="av" style="color:#e65100">${pubHol+compHol}</div><div class="al">🗓️ Holiday</div></div>`;
+    }
+}
+
+
 // Show all attendance records across all dates for a single employee
 async function renderEmployeeHistory(empName, fromDate='', toDate=''){
     const content = document.getElementById('attendContent');
@@ -3017,18 +3168,26 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
             return {date, name:empName, status:'Unknown', login:'', logout:'', notes:''};
         });
 
-        // Summary for this employee
-        const fullDay  = merged.filter(r=>r.status==='Full Day'||r.status==='Present'||r.status==='Ignored').length;
-        const halfDay  = merged.filter(r=>r.status==='Half Day').length;
-        const absent   = merged.filter(r=>r.status==='Not Recorded'||r.status==='Absent').length;
-        const onLeave  = merged.filter(r=>r.status==='On Leave').length;
+        // Summary for this employee (full, unfiltered counts)
+        const fullDay    = merged.filter(r=>r.status==='Full Day'||r.status==='Present'||r.status==='Ignored').length;
+        const halfDay    = merged.filter(r=>r.status==='Half Day').length;
+        const absent     = merged.filter(r=>r.status==='Not Recorded'||r.status==='Absent').length;
+        const onLeave    = merged.filter(r=>r.status==='On Leave').length;
+        const maternity  = merged.filter(r=>r.status==='Maternity').length;
+        const menstrual  = merged.filter(r=>r.status==='Menstrual').length;
+        const weekOff    = merged.filter(r=>r.status==='Week Off').length;
+        const pubHol     = merged.filter(r=>r.status==='Public Holiday').length;
+        const compHol    = merged.filter(r=>r.status==='Company Holiday').length;
+        const allLeaves  = onLeave+maternity+menstrual;
 
         document.getElementById('attendSummary').innerHTML = `
             <div class="attend-stat"><div class="av" style="color:#2c3e50">${merged.length}</div><div class="al">Total Days</div></div>
             <div class="attend-stat"><div class="av" style="color:#27ae60">${fullDay}</div><div class="al">✅ Full Day</div></div>
             <div class="attend-stat"><div class="av" style="color:#e67e22">${halfDay}</div><div class="al">🌓 Half Day</div></div>
             <div class="attend-stat"><div class="av" style="color:#aaa">${absent}</div><div class="al">📭 Not Recorded</div></div>
-            <div class="attend-stat"><div class="av" style="color:#dc3545">${onLeave}</div><div class="al">📅 On Leave</div></div>`;
+            <div class="attend-stat"><div class="av" style="color:#dc3545">${allLeaves}</div><div class="al">📅 On Leave</div></div>
+            <div class="attend-stat"><div class="av" style="color:#5a32a3">${weekOff}</div><div class="al">🏖️ Week Off</div></div>
+            <div class="attend-stat"><div class="av" style="color:#e65100">${pubHol+compHol}</div><div class="al">🗓️ Holiday</div></div>`;
 
         const rowsHtml = merged.map(r=>{
             const badgeCls = r.status==='Full Day'||r.status==='Present'?'ab-fullday':
@@ -3038,7 +3197,7 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
             const hours = calcWorkingHours(r.login, r.logout);
             const loginTxt  = r.login  && r.login!=='❌ No login'  ? r.login  : '—';
             const logoutTxt = r.logout && r.logout!=='❌ No logout' ? r.logout : '—';
-            return `<tr>
+            return `<tr data-status="${esc(r.status)}" data-login="${esc(r.login||'')}" data-logout="${esc(r.logout||'')}">
                 <td><strong>${formatDate(r.date)}</strong></td>
                 <td style="color:#888;font-size:12px;">${getDayName(r.date)}</td>
                 <td><span class="attend-badge ${badgeCls}">${r.status}</span></td>
@@ -3055,6 +3214,10 @@ async function renderEmployeeHistory(empName, fromDate='', toDate=''){
             <thead><tr><th>Date</th><th>Day</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th><th>Notes</th></tr></thead>
             <tbody>${rowsHtml}</tbody>
         </table>`;
+        // Re-apply any active filters after render
+        if(_attendActiveFilters.size > 0) applyAttendFilterToTable();
+        // Store merged for CSV export
+        window._empHistoryMerged = merged;
     } catch(e){
         content.innerHTML = '<div class="no-attend">❌ Error loading history: '+e.message+'</div>';
     }
@@ -3372,6 +3535,41 @@ function deleteAttendanceByDate(){
 }
 
 function exportAttendanceCSV(){
+    const empName = getEmpFilter();
+
+    // ── Employee history mode: export filtered rows ──
+    if(empName && window._empHistoryMerged){
+        const from    = document.getElementById('empRangeFrom').value;
+        const to      = document.getElementById('empRangeTo').value;
+        const noFilter = _attendActiveFilters.size === 0;
+
+        // Respect active status filter
+        const rows = window._empHistoryMerged.filter(r=>{
+            if(!noFilter && !_attendActiveFilters.has(r.status)) return false;
+            return true;
+        });
+
+        if(!rows.length){ showToast('No rows to export with current filter.'); return; }
+
+        const filterNote = noFilter ? '' : [..._attendActiveFilters].join('+');
+        const rangeNote  = (from||to) ? `_${from||'start'}_to_${to||'end'}` : '_all-dates';
+        const filename   = `attendance-${empName.replace(/\s+/g,'-')}${rangeNote}${filterNote?'_'+filterNote:''}.csv`;
+
+        let csv = 'Date,Day,Employee,Status,Login,Logout,Working Hours,Notes\n';
+        rows.forEach(r=>{
+            const hrs = calcWorkingHours(r.login,r.logout);
+            csv += `"${r.date}","${getDayName(r.date)}","${r.name}","${r.status}","${r.login||''}","${r.logout||''}","${hrs}","${(r.notes||'').replace(/"/g,'""')}"\n`;
+        });
+        const a = Object.assign(document.createElement('a'),{
+            href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+            download: filename
+        });
+        a.click(); URL.revokeObjectURL(a.href);
+        showToast(`📥 Exported ${rows.length} rows`+(filterNote?' (filtered)':''));
+        return;
+    }
+
+    // ── Daily date mode: export all employees for that date ──
     if(!attendCurrentDate){ showToast('Select a date first.'); return; }
     const allEmp = [...teams.annotation.map(n=>({name:n,team:'annotation'})),
                     ...teams.assessment.map(n=>({name:n,team:'assessment'}))];
@@ -3385,8 +3583,7 @@ function exportAttendanceCSV(){
     let csv = 'Date,Employee,Team,Status,Login,Logout,Working Hours,Notes\n';
     merged.forEach(r=>{
         const hrs = calcWorkingHours(r.login,r.logout);
-        csv += `"${attendCurrentDate}","${r.name}","${teamLabel(r.team)}","${r.status}","${r.login||''}","${r.logout||''}","${hrs}","${(r.notes||'').replace(/"/g,'""')}"
-`;
+        csv += `"${attendCurrentDate}","${r.name}","${teamLabel(r.team)}","${r.status}","${r.login||''}","${r.logout||''}","${hrs}","${(r.notes||'').replace(/"/g,'""')}"\n`;
     });
     const a = Object.assign(document.createElement('a'),{
         href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
