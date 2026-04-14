@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+slack tracker working<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1010,9 +1010,10 @@
                     <option value="Half Day">🌓 Half Day (less than 6 hrs)</option>
                     <option value="Week Off">🏖️ Week Off</option>
                     <option value="On Leave">📅 On Leave</option>
+                    <option value="Maternity">🤱 Maternity Leave</option>
+                    <option value="Menstrual">🌸 Menstrual Leave</option>
                     <option value="Incomplete">⚠️ Incomplete (missing login or logout)</option>
                     <option value="Absent">❌ Absent</option>
-                    <option value="On Leave">📅 On Leave</option>
                 </select>
             </div>
             <div id="attendTimeFields">
@@ -3427,7 +3428,7 @@ function renderAttendance(dateStr){
 
 function onAttendStatusChange(){
     const s = document.getElementById('attendStatus').value;
-    document.getElementById('attendTimeFields').style.display = (s==='Absent'||s==='On Leave') ? 'none' : 'block';
+    document.getElementById('attendTimeFields').style.display = (s==='Absent'||s==='On Leave'||s==='Maternity'||s==='Menstrual') ? 'none' : 'block';
 }
 
 // Recalculate status from login/logout when times are provided manually
@@ -3497,8 +3498,8 @@ async function saveManualEntry(){
         name:   name,
         team:   getTeam(name) || 'annotation',
         status: status,
-        login:  (status==='Absent'||status==='On Leave') ? '' : login,
-        logout: (status==='Absent'||status==='On Leave') ? '' : logout,
+        login:  (status==='Absent'||status==='On Leave'||status==='Maternity'||status==='Menstrual') ? '' : login,
+        logout: (status==='Absent'||status==='On Leave'||status==='Maternity'||status==='Menstrual') ? '' : logout,
         notes:  notes,
         source: 'manual'
     };
